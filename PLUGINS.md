@@ -30,7 +30,7 @@
 
 ### GainKnob
 
-**Status:** ✅ **Working**
+**Status:** 📦 **Installed**
 **Version:** 1.0.0
 **Created:** 2025-11-10
 **Completed:** 2025-11-10
