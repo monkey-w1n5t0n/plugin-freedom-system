@@ -12,7 +12,6 @@ mkdir -p .claude/skills/my-new-skill
 ---
 name: my-new-skill
 description: Brief description of what this skill does and when to use it
-model: sonnet
 allowed-tools:
   - Read
   - Write

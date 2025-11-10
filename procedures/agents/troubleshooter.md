@@ -274,7 +274,6 @@ Error: Obscure linker error on M1 Mac
 ```yaml
 name: troubleshooter
 description: Deep research agent for JUCE plugin development issues
-model: sonnet
 tools:
   - Bash
   - Read

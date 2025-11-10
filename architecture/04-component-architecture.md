@@ -120,7 +120,6 @@ If preconditions pass, invoke plugin-workflow skill starting at Stage 0 (Researc
 ---
 name: plugin-workflow
 description: 7-stage JUCE plugin development workflow (dispatcher pattern)
-model: sonnet
 allowed-tools:
   - Task      # To spawn subagents
   - Bash      # For git commits
@@ -146,7 +145,6 @@ preconditions:
 name: dsp-agent
 type: agent
 description: Implement audio processing from architecture.md (dsp-agent subagent)
-model: sonnet
 allowed-tools:
   - Read
   - Edit
@@ -170,7 +168,6 @@ allowed-tools:
 name: validator
 type: agent
 description: Independent verification of stage completion claims (validator subagent)
-model: sonnet  # Quality > speed at gates (see rationale below)
 allowed-tools:
   - Read
   - Bash  # For checking files exist
@@ -353,7 +350,6 @@ description: |
   to verify quality, design decisions, and best practices.
   Invoke for complexity 4+ or when thorough review needed.
 tools: Read, Grep, Bash
-model: sonnet  # Quality over speed for semantic validation
 ---
 
 You are an independent validator performing semantic review.
