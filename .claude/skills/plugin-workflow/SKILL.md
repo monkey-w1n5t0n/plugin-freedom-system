@@ -61,48 +61,260 @@ Choose (1-2): _
 
 If user chooses 1, exit and instruct them to run `/dream [PluginName]`.
 
+---
+
+## Stage Dispatcher
+
+**Purpose:** Route to correct stage implementation based on current state.
+
+**Entry point:** Called by /implement command or when resuming workflow.
+
+**Implementation:**
+
+1. Determine current stage:
+
+```bash
+# Check if handoff file exists (resuming)
+if [ -f "plugins/${PLUGIN_NAME}/.continue-here.md" ]; then
+    # Parse stage from handoff YAML frontmatter
+    CURRENT_STAGE=$(grep "^stage:" plugins/${PLUGIN_NAME}/.continue-here.md | awk '{print $2}')
+    echo "Resuming from Stage ${CURRENT_STAGE}"
+else
+    # Starting new workflow
+    CURRENT_STAGE=0
+    echo "Starting workflow at Stage 0"
+fi
+```
+
+2. Verify preconditions for target stage:
+
+```javascript
+function checkStagePreconditions(pluginName, stage) {
+  // Stage 0: Just needs creative brief (already checked)
+  if (stage === 0) {
+    return { allowed: true }
+  }
+
+  // Stage 1: Requires research.md + contracts
+  if (stage === 1) {
+    const researchExists = fileExists(`plugins/${pluginName}/.ideas/research.md`)
+    const paramSpecExists = fileExists(`plugins/${pluginName}/.ideas/parameter-spec.md`)
+    const archSpecExists = fileExists(`plugins/${pluginName}/.ideas/architecture.md`)
+
+    if (!researchExists) {
+      return {
+        allowed: false,
+        reason: "Stage 0 research must complete before Stage 1",
+        action: "Complete Stage 0 first"
+      }
+    }
+
+    if (!paramSpecExists || !archSpecExists) {
+      return {
+        allowed: false,
+        reason: "Cannot proceed to Stage 1 - missing implementation contracts",
+        action: "Complete ui-mockup workflow and create architecture.md",
+        contracts: {
+          "parameter-spec.md": paramSpecExists,
+          "architecture.md": archSpecExists
+        }
+      }
+    }
+
+    return { allowed: true }
+  }
+
+  // Stages 2-6: Require previous stage complete
+  if (stage >= 2 && stage <= 6) {
+    const status = getPluginStatus(pluginName)
+    const expectedPrevious = stage - 1
+
+    // Check PLUGINS.md shows previous stage complete
+    if (!status.includes(`Stage ${expectedPrevious}`) &&
+        !status.includes('complete')) {
+      return {
+        allowed: false,
+        reason: `Stage ${expectedPrevious} must complete before Stage ${stage}`,
+        action: `Complete Stage ${expectedPrevious} or use /continue to resume`
+      }
+    }
+
+    return { allowed: true }
+  }
+
+  return { allowed: false, reason: "Invalid stage number" }
+}
+```
+
+3. Route to stage implementation:
+
+```javascript
+function dispatchStage(pluginName, stageNumber) {
+  // Check preconditions
+  const preconditionCheck = checkStagePreconditions(pluginName, stageNumber)
+
+  if (!preconditionCheck.allowed) {
+    // Display blocking message
+    console.log(`✗ BLOCKED: ${preconditionCheck.reason}`)
+    console.log(`Action: ${preconditionCheck.action}`)
+
+    if (preconditionCheck.contracts) {
+      console.log("\nContract status:")
+      for (const [name, exists] of Object.entries(preconditionCheck.contracts)) {
+        console.log(`${exists ? '✓' : '✗'} ${name}`)
+      }
+    }
+
+    return { status: 'blocked', reason: preconditionCheck.reason }
+  }
+
+  // Route to stage
+  switch(stageNumber) {
+    case 0:
+      return executeStage0Research(pluginName)
+    case 1:
+      return executeStage1Planning(pluginName)
+    case 2:
+      return executeStage2FoundationStub(pluginName) // Phase 2b: stub
+    case 3:
+      return executeStage3ShellStub(pluginName) // Phase 2b: stub
+    case 4:
+      return executeStage4DSPStub(pluginName) // Phase 2b: stub
+    case 5:
+      return executeStage5GUIStub(pluginName) // Phase 2b: stub
+    case 6:
+      return executeStage6Validation(pluginName) // Phase 2c
+    default:
+      return { status: 'error', reason: `Invalid stage: ${stageNumber}` }
+  }
+}
+```
+
+4. Stage loop for continuous execution:
+
+```javascript
+function runWorkflow(pluginName, startStage = 0) {
+  let currentStage = startStage
+  let shouldContinue = true
+
+  while (shouldContinue && currentStage <= 6) {
+    console.log(`\n━━━ Stage ${currentStage} ━━━\n`)
+
+    // Execute stage
+    const result = dispatchStage(pluginName, currentStage)
+
+    if (result.status === 'blocked') {
+      console.log("\nWorkflow blocked. Resolve issues and resume with /continue.")
+      return result
+    }
+
+    if (result.status === 'error') {
+      console.log(`\nError: ${result.reason}`)
+      return result
+    }
+
+    // Present decision menu
+    const choice = presentDecisionMenu({
+      stage: currentStage,
+      completionStatement: result.completionStatement,
+      pluginName: pluginName
+    })
+
+    // Handle user choice
+    if (choice === 'continue' || choice === 1) {
+      currentStage++
+    } else if (choice === 'pause') {
+      console.log("\n✓ Workflow paused. Resume anytime with /continue")
+      shouldContinue = false
+    } else {
+      // Handle other menu options (review, test, etc.)
+      handleMenuChoice(choice, pluginName, currentStage)
+      // Re-present menu after handling
+    }
+  }
+
+  if (currentStage > 6) {
+    console.log("\n✓ All stages complete!")
+  }
+}
+```
+
+**Usage:**
+
+```javascript
+// From /implement command:
+runWorkflow(pluginName, 0)
+
+// From /continue command (via context-resume):
+const handoff = readHandoffFile(pluginName)
+const resumeStage = handoff.stage
+runWorkflow(pluginName, resumeStage)
+```
+
+---
+
 ## Stage 0: Research
 
 **Goal:** Understand what we're building before writing code
 
 **Duration:** 5-10 minutes
 
+**Model Configuration:**
+- Model: Opus (complex reasoning for algorithm comparison)
+- Extended thinking: ENABLED
+- Budget: 10000 tokens
+
 **Actions:**
 
-1. Read creative brief if it exists:
+1. Read creative brief:
 
 ```bash
 cat plugins/[PluginName]/.ideas/creative-brief.md
 ```
 
-2. Define plugin type and technical approach:
+2. Identify plugin type and technical approach:
 
    - Audio effect, MIDI effect, synthesizer, or utility?
    - Input/output configuration (mono, stereo, sidechain)
    - Processing type (time-domain, frequency-domain, granular)
 
-3. Research professional examples:
+3. **Context7 JUCE Documentation Lookup** (CRITICAL):
 
-   - Find similar plugins (FabFilter, Waves, etc.)
-   - Note implementation patterns
-   - Identify industry standards
+   a. Resolve JUCE library ID:
+   ```
+   Use: mcp__context7__resolve-library-id("JUCE")
+   Returns: Context7-compatible library ID (e.g., "/juce-framework/JUCE")
+   ```
 
-4. Check DSP feasibility:
+   b. Get JUCE DSP documentation:
+   ```
+   Use: mcp__context7__get-library-docs(libraryID, topic="dsp modules", tokens=5000)
+   Extract: Relevant juce::dsp classes for identified plugin type
+   ```
 
-   - Use Context7 MCP to lookup juce::dsp modules
-   - Verify JUCE has needed algorithms
-   - Note any custom DSP requirements
+   c. Document JUCE modules found:
+   - List specific juce::dsp classes (e.g., juce::dsp::Gain, juce::dsp::IIR::Filter)
+   - Note Context7 library references
+   - Identify any missing algorithms (need custom DSP)
+
+4. Research professional plugin examples:
+
+   - Search web for industry leaders (FabFilter, Waves, UAD, etc.)
+   - Document 3-5 similar plugins
+   - Note sonic characteristics
+   - Extract typical parameter ranges used
 
 5. Research parameter ranges:
 
    - Industry-standard ranges for plugin type
-   - Typical defaults
+   - Typical defaults (reference professional plugins)
    - Skew factors for nonlinear ranges
 
 6. Check design sync (if mockup exists):
-   - Read `plugins/[Name]/.ideas/mockups/v*-ui.yaml` if present
-   - Compare mockup parameters with creative brief
-   - Flag any mismatches for resolution
+   - Look for `plugins/[Name]/.ideas/mockups/v*-ui.yaml`
+   - If exists: Compare mockup parameters with creative brief
+   - If conflicts: Invoke design-sync skill
+   - Document sync results
 
 **Output:** Create `plugins/[PluginName]/.ideas/research.md`
 
@@ -116,31 +328,48 @@ cat plugins/[PluginName]/.ideas/creative-brief.md
 
 ## Similar Plugins
 
-- [Plugin 1]: [Key features]
-- [Plugin 2]: [Key features]
-- [Plugin 3]: [Key features]
+- [Plugin 1]: [Key features, parameter ranges]
+- [Plugin 2]: [Key features, parameter ranges]
+- [Plugin 3]: [Key features, parameter ranges]
 
 ## Technical Approach
 
 **Processing Type:** [Time-domain/Frequency-domain/etc.]
-**JUCE Modules:** [juce::dsp modules to use]
-**Custom DSP:** [Any algorithms not in JUCE]
+**JUCE Modules Identified** (from Context7):
+- `juce::dsp::[Module1]` - [Purpose]
+- `juce::dsp::[Module2]` - [Purpose]
+- (List all identified modules with Context7 library reference)
+
+**Custom DSP Required:** [Any algorithms not available in JUCE]
 
 ## Parameter Research
 
-| Parameter | Typical Range | Default | Notes               |
-| --------- | ------------- | ------- | ------------------- |
-| [Name]    | [Min-Max]     | [Value] | [Industry standard] |
+| Parameter | Typical Range | Default | Skew | Notes (Industry Standard) |
+| --------- | ------------- | ------- | ---- | ------------------------- |
+| [Name]    | [Min-Max]     | [Value] | [X]  | [Professional plugin ranges] |
 
-## Implementation Notes
+## Technical Feasibility
 
-[Technical considerations, gotchas, optimization tips]
+**JUCE Support:** [All modules available? / Custom implementation needed?]
+**Complexity Factors:** [Feedback loops? FFT? Multiband? Modulation?]
+**Implementation Challenges:** [Known gotchas from research]
+
+## Design Sync Results
+
+[If mockup exists]
+- Brief ↔ Mockup consistency: [Pass/Conflicts found]
+- Conflicts: [List if any]
+- Resolution: [How resolved]
+
+[If no mockup]
+- No mockup found (OK - will create during workflow)
 
 ## References
 
-- JUCE docs: [URLs]
-- Examples: [GitHub repos, tutorials]
-- Papers: [DSP papers if applicable]
+- Context7 JUCE Library: [Library ID used]
+- Professional Plugins: [URLs to researched plugins]
+- JUCE Documentation: [Specific doc pages]
+- Papers/Resources: [DSP papers if applicable]
 ```
 
 **Create handoff file:** `plugins/[PluginName]/.continue-here.md`
@@ -187,39 +416,87 @@ Research phase complete. Ready to proceed to planning.
 
 **Update PLUGINS.md:**
 
-Check if entry exists:
+1. Check if entry exists:
 ```bash
-grep "^### $PLUGIN_NAME$" PLUGINS.md
+grep "^### ${PLUGIN_NAME}$" PLUGINS.md
 ```
 
-If not exists, call `createPluginEntry(pluginName, type, brief)`.
+2. If NOT found, create initial entry:
 
-Then call `updatePluginStatus(pluginName, "🚧 Stage 0")`.
+Use Edit tool to add to PLUGINS.md:
+```markdown
+### [PluginName]
+**Status:** 💡 Ideated
+**Type:** [Audio Effect | MIDI Instrument | Synth]
+**Created:** [YYYY-MM-DD]
 
-Add timeline entry: `updatePluginTimeline(pluginName, 0, "Research completed")`.
+[Brief description from creative-brief.md]
+
+**Lifecycle Timeline:**
+- **[YYYY-MM-DD]:** Creative brief created
+
+**Last Updated:** [YYYY-MM-DD]
+```
+
+3. Update status to Stage 0:
+
+Use Edit tool to change:
+```markdown
+**Status:** 💡 Ideated → **Status:** 🚧 Stage 0
+```
+
+4. Add timeline entry:
+
+Use Edit tool to append to Lifecycle Timeline:
+```markdown
+- **[YYYY-MM-DD] (Stage 0):** Research completed
+```
+
+5. Update Last Updated field
 
 **Git commit:**
 
-Call `commitStage(pluginName, 0, "research complete")`.
+```bash
+git add plugins/[PluginName]/.ideas/research.md plugins/[PluginName]/.continue-here.md PLUGINS.md
+git commit -m "$(cat <<'EOF'
+feat: [PluginName] Stage 0 - research complete
 
-This commits:
-- `plugins/[PluginName]/.ideas/research.md`
-- `plugins/[PluginName]/.continue-here.md`
-- `PLUGINS.md`
+🤖 Generated with Claude Code
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+EOF
+)"
+```
+
+Display commit hash:
+```bash
+git log -1 --format='✓ Committed: %h - Stage 0 complete'
+```
 
 **Decision menu:**
 
+Present inline numbered list (NOT AskUserQuestion):
+
 ```
-✓ Stage 0 complete: research finished
+✓ Stage 0 complete: research documented
 
 What's next?
 1. Continue to Stage 1 (recommended)
 2. Review research findings
-3. Pause here
-4. Other
+3. Improve creative brief based on research
+4. Run deeper investigation (deep-research skill) ← Discover JUCE troubleshooting
+5. Pause here
+6. Other
 
-Choose (1-4): _
+Choose (1-6): _
 ```
+
+Wait for user response. Handle:
+- Number (1-6): Execute corresponding option
+- "continue" keyword: Execute option 1
+- "pause" keyword: Execute option 5
+- "review" keyword: Execute option 2
+- "other": Ask "What would you like to do?" then re-present menu
 
 ---
 
@@ -229,62 +506,128 @@ Choose (1-4): _
 
 **Duration:** 2-5 minutes
 
+**Model Configuration:**
+- Model: Sonnet (deterministic planning)
+- Extended thinking: DISABLED
+
 **Preconditions:**
 
-- Stage 0 must be complete
-- research.md must exist
+1. Stage 0 must be complete (research.md exists)
+2. PLUGINS.md shows `🚧 Stage 0` or similar
 
-**Contract Prerequisites:**
+**Contract Prerequisites (CRITICAL - BLOCKING):**
 
 Check for required contract files:
 
 ```bash
-test -f "plugins/$PLUGIN_NAME/.ideas/parameter-spec.md"
-test -f "plugins/$PLUGIN_NAME/.ideas/architecture.md"
+test -f "plugins/${PLUGIN_NAME}/.ideas/parameter-spec.md" && echo "✓ parameter-spec.md" || echo "✗ parameter-spec.md MISSING"
+test -f "plugins/${PLUGIN_NAME}/.ideas/architecture.md" && echo "✓ architecture.md" || echo "✗ architecture.md MISSING"
+test -f "plugins/${PLUGIN_NAME}/.ideas/research.md" && echo "✓ research.md" || echo "✗ research.md MISSING"
 ```
 
-If either missing, BLOCK with message:
+**If parameter-spec.md OR architecture.md is missing:**
+
+STOP IMMEDIATELY and BLOCK with this exact message:
 
 ```
-Cannot proceed to Stage 1 - missing implementation contracts:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✗ BLOCKED: Cannot proceed to Stage 1
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Required before implementation:
-✓ creative-brief.md exists
-✗ parameter-spec.md (generated by finalizing UI mockup)
-✗ architecture.md (generated by completing Stage 0)
+Missing implementation contracts:
 
-Stage 1 requires these contracts to prevent drift during implementation.
+Required contracts:
+✓ creative-brief.md - exists
+[✓/✗] parameter-spec.md - [exists/MISSING (required)]
+[✓/✗] architecture.md - [exists/MISSING (required)]
+✓ research.md - exists
 
-Next step: Create UI mockup (/dream [PluginName] → Create UI mockup) and finalize it to generate parameter-spec.md.
+WHY BLOCKED:
+Stage 1 planning requires complete specifications to prevent implementation
+drift. These contracts are the single source of truth.
+
+HOW TO UNBLOCK:
+1. parameter-spec.md: Complete ui-mockup two-phase workflow
+   - Run: /dream [PluginName]
+   - Choose: "Create UI mockup"
+   - Design UI and finalize (Phase 4.5)
+   - Finalization generates parameter-spec.md
+
+2. architecture.md: Create DSP architecture specification
+   - Use research.md findings (JUCE modules identified)
+   - Document DSP components and processing chain
+   - Map parameters to DSP components
+   - Save to plugins/[PluginName]/.ideas/architecture.md
+
+Once both contracts exist, Stage 1 will proceed.
 ```
 
-**Actions:**
+DO NOT PROCEED PAST THIS POINT if contracts are missing.
 
-1. Calculate complexity score:
+Exit skill and wait for user to create contracts.
 
+**Actions (contracts confirmed present):**
+
+1. Read all contracts:
+
+```bash
+# Read parameter specification
+cat plugins/[PluginName]/.ideas/parameter-spec.md
+
+# Read DSP architecture
+cat plugins/[PluginName]/.ideas/architecture.md
+
+# Read research findings
+cat plugins/[PluginName]/.ideas/research.md
 ```
-score = min(param_count / 5, 2) + algorithm_count + feature_count
+
+2. Calculate complexity score:
+
+**Formula:**
+```
+score = min(param_count / 5, 2.0) + algorithm_count + feature_count
+Cap at 5.0
 ```
 
-Where:
+**Extract metrics:**
 
-- `param_count` = number of parameters from parameter-spec.md
-- `algorithm_count` = distinct DSP algorithms (filters, delays, etc.)
-- `feature_count` = special features (1 point each):
-  - Feedback loops
-  - FFT/frequency domain processing
-  - Multiband processing
-  - Modulation systems
-  - External MIDI control
+From parameter-spec.md:
+- Count parameters (each parameter definition = 1)
+- param_score = min(param_count / 5, 2.0)
 
-Cap at 5.0.
+From architecture.md:
+- Count distinct DSP algorithms/components
+- algorithm_count = number of juce::dsp classes or custom algorithms
 
-2. Determine implementation strategy:
+From architecture.md (identify features):
+- Feedback loops present? (+1)
+- FFT/frequency domain processing? (+1)
+- Multiband processing? (+1)
+- Modulation systems (LFO, envelope)? (+1)
+- External MIDI control? (+1)
+- feature_count = sum of above
 
-   - Simple (score ≤ 2): Single-pass implementation
-   - Complex (score ≥ 3): Phase-based implementation
+**Calculate:**
+```
+total_score = param_score + algorithm_count + feature_count
+final_score = min(total_score, 5.0)
+```
 
-3. For complex plugins, create phases:
+**Show breakdown:**
+```
+Complexity Calculation:
+- Parameters: [N] parameters ([N/5] points, capped at 2.0) = [X.X]
+- Algorithms: [N] DSP components = [N]
+- Features: [List] = [N]
+Total: [X.X] / 5.0
+```
+
+3. Determine implementation strategy:
+
+   - **Simple (score ≤ 2.0):** Single-pass implementation
+   - **Complex (score ≥ 3.0):** Phase-based implementation with staged commits
+
+4. For complex plugins (score ≥ 3), create phases:
 
 **Stage 4 (DSP) phases:**
 
@@ -413,50 +756,89 @@ Total: ~[X] hours
 
 **Update .continue-here.md:**
 
-Update stage to 1, add complexity score to YAML frontmatter:
+Use Edit tool to update YAML frontmatter:
 
 ```yaml
 ---
 plugin: [PluginName]
 stage: 1
-status: in_progress
+status: complete
 last_updated: [YYYY-MM-DD HH:MM:SS]
 complexity_score: [X.X]
 phased_implementation: [true/false]
 ---
 ```
 
-Update markdown body with completed Stage 1 info.
+Update markdown sections:
+- Current State: "Stage 1 - Planning complete"
+- Completed So Far: Add Stage 1 details
+- Next Steps: List Stage 2 actions
+- Context to Preserve: Add complexity score, strategy
 
 **Update PLUGINS.md:**
 
-Call `updatePluginStatus(pluginName, "🚧 Stage 1")`.
+1. Update status:
 
-Add timeline entry: `updatePluginTimeline(pluginName, 1, "Planning - Complexity X.Y")`.
+Use Edit tool to change:
+```markdown
+**Status:** 🚧 Stage 0 → **Status:** 🚧 Stage 1
+```
+
+2. Add timeline entry:
+
+Use Edit tool to append to Lifecycle Timeline:
+```markdown
+- **[YYYY-MM-DD] (Stage 1):** Planning - Complexity [X.X]
+```
+
+3. Update Last Updated field
 
 **Git commit:**
 
-Call `commitStage(pluginName, 1, "planning complete")`.
+```bash
+git add plugins/[PluginName]/.ideas/plan.md plugins/[PluginName]/.continue-here.md PLUGINS.md
+git commit -m "$(cat <<'EOF'
+feat: [PluginName] Stage 1 - planning complete
 
-This commits:
-- `plugins/[PluginName]/.ideas/plan.md`
-- `plugins/[PluginName]/.continue-here.md`
-- `PLUGINS.md`
+Complexity: [X.X]
+Strategy: [Single-pass | Phased implementation]
+
+🤖 Generated with Claude Code
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+EOF
+)"
+```
+
+Display commit hash:
+```bash
+git log -1 --format='✓ Committed: %h - Stage 1 complete'
+```
 
 **Decision menu:**
 
+Present inline numbered list (NOT AskUserQuestion):
+
 ```
-✓ Stage 1 complete: planning finished (complexity [X.X], [simple/phased])
+✓ Stage 1 complete: plan created (Complexity [X.X], [single-pass/phased])
 
 What's next?
 1. Continue to Stage 2 (recommended)
-2. Review plan
+2. Review plan details
 3. Adjust complexity assessment
-4. Pause here
-5. Other
+4. Review contracts (parameter-spec, architecture)
+5. Pause here
+6. Other
 
-Choose (1-5): _
+Choose (1-6): _
 ```
+
+Wait for user response. Handle:
+- Number (1-6): Execute corresponding option
+- "continue" keyword: Execute option 1
+- "pause" keyword: Execute option 5
+- "review" keyword: Execute option 2
+- "other": Ask "What would you like to do?" then re-present menu
 
 ---
 
