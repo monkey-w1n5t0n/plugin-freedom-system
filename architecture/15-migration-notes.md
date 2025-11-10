@@ -78,7 +78,7 @@
 #!/bin/bash
 # migrate-to-v2.sh
 
-echo "Migrating TÂCHES system from v1 to v2..."
+echo "Migrating PLUGIN FREEDOM SYSTEM system from v1 to v2..."
 
 # 1. Create agent directory
 mkdir -p .claude/agents

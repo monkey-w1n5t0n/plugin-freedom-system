@@ -7,7 +7,7 @@ This is critical for the WebView integration specifically - the proven patterns 
 </objective>
 
 <context>
-This project (TÂCHES v2.0) is a plugin development system built on JUCE with WebView-based UIs. The documentation is split into two layers:
+This project (PLUGIN FREEDOM SYSTEM) is a plugin development system built on JUCE with WebView-based UIs. The documentation is split into two layers:
 
 **Architecture layer** (`architecture/`):
 - High-level design decisions

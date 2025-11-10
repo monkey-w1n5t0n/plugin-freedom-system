@@ -1,6 +1,6 @@
 ## Executive Summary
 
-TÂCHES v2.0 is a conversational AI system for professional JUCE audio plugin development through natural dialogue with Claude Code. The v2 architecture addresses v1's "Frankenstein" feeling through:
+PLUGIN FREEDOM SYSTEM is a conversational AI system for professional JUCE audio plugin development through natural dialogue with Claude Code. The v2 architecture addresses v1's "Frankenstein" feeling through:
 
 1. **Subagent architecture** - Fresh context per implementation stage eliminates context accumulation
 2. **Contract-driven development** - parameter-spec.md + architecture.md prevent drift between design and implementation

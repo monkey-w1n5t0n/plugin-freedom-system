@@ -6,7 +6,7 @@
 
 ## Core Concept
 
-TÂCHES v2.0 is designed for **Claude Code's checkpointing feature (Esc+Esc)**, which allows users to rewind conversations and try different paths. The checkpoint system makes every decision boundary a safe exploration point.
+PLUGIN FREEDOM SYSTEM is designed for **Claude Code's checkpointing feature (Esc+Esc)**, which allows users to rewind conversations and try different paths. The checkpoint system makes every decision boundary a safe exploration point.
 
 ## What It Enables
 

@@ -1,6 +1,6 @@
 # System Philosophy
 
-**TÂCHES v2.0 is designed to be discovered through play, not learned through manuals.**
+**PLUGIN FREEDOM SYSTEM is designed to be discovered through play, not learned through manuals.**
 
 ---
 
@@ -187,7 +187,7 @@ What would you like to do?
 - Feels lost when stuck
 - Gives up before mastering system
 
-**TÂCHES approach:**
+**PLUGIN FREEDOM SYSTEM approach:**
 - User starts playing immediately
 - System shows options in context
 - User discovers capabilities organically

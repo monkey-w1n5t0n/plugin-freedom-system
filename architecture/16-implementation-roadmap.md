@@ -94,7 +94,7 @@
 
 ## Summary
 
-TÂCHES v2.0 is a **discoverable, slash-command-driven system** for conversational JUCE plugin development.
+PLUGIN FREEDOM SYSTEM is a **discoverable, slash-command-driven system** for conversational JUCE plugin development.
 
 **Core innovations:**
 1. **Slash command entry** - Autocomplete discovery, deterministic routing

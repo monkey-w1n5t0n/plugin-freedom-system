@@ -1,10 +1,10 @@
-# TÂCHES v2.0 Architecture (Modular)
+# PLUGIN FREEDOM SYSTEM Architecture (Modular)
 
 Complete system architecture split into manageable sections.
 
 ## Start Here
 
-**[System Philosophy](./00-PHILOSOPHY.md)** - Read this first to understand the "why" behind all design decisions. TÂCHES is designed for discovery through play, not documentation-heavy learning.
+**[System Philosophy](./00-PHILOSOPHY.md)** - Read this first to understand the "why" behind all design decisions. PLUGIN FREEDOM SYSTEM is designed for discovery through play, not documentation-heavy learning.
 
 ## Table of Contents
 

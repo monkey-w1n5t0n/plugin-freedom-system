@@ -28,7 +28,7 @@ The system is built on 5 fundamental concepts:
 
 **Example Structure:**
 ```markdown
-# TÂCHES v2.0 - Plugin Development System
+# PLUGIN FREEDOM SYSTEM - Plugin Development System
 
 ## System Components
 - Skills: `.claude/skills/` - plugin-workflow, plugin-ideation, plugin-improve, ui-mockup
