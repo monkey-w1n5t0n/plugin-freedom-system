@@ -50,6 +50,9 @@ private:
     float dropoutEnvelope { 1.0f };  // Smooth attack/release (1.0 = no attenuation)
     float noiseFilterState[2] { 0.0f, 0.0f };  // One-pole lowpass filter state per channel
 
+    // Phase 4.4: Dry/Wet Mixing
+    juce::dsp::DryWetMixer<float> dryWetMixer;
+
     // APVTS comes AFTER DSP components
     juce::AudioProcessorValueTreeState parameters;
 

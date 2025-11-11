@@ -78,6 +78,14 @@ void TapeAgeAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock
     // Initialize noise filter state to zero
     noiseFilterState[0] = 0.0f;
     noiseFilterState[1] = 0.0f;
+
+    // Phase 4.4: Prepare dry/wet mixer
+    dryWetMixer.prepare(currentSpec);
+    dryWetMixer.reset();
+
+    // Set wet latency to compensate for oversampler latency (architecture.md line 134)
+    int oversamplerLatency = static_cast<int>(oversampler.getLatencyInSamples());
+    dryWetMixer.setWetLatency(static_cast<float>(oversamplerLatency));
 }
 
 void TapeAgeAudioProcessor::releaseResources()
@@ -97,6 +105,15 @@ void TapeAgeAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
     // Clear unused channels
     for (int i = getTotalNumInputChannels(); i < getTotalNumOutputChannels(); ++i)
         buffer.clear(i, 0, buffer.getNumSamples());
+
+    // Phase 4.4: Store dry signal BEFORE any processing
+    juce::dsp::AudioBlock<float> block(buffer);
+    dryWetMixer.pushDrySamples(block);
+
+    // Read mix parameter (0.0 = fully dry, 1.0 = fully wet)
+    auto* mixParam = parameters.getRawParameterValue("mix");
+    float mixValue = mixParam->load();
+    dryWetMixer.setWetMixProportion(mixValue);
 
     // Phase 4.1: Core Saturation Processing
     // Processing chain:
@@ -129,9 +146,6 @@ void TapeAgeAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
         // Heavy range: linear interpolation from 8 to 20
         gain = 8.0f + ((drive - 0.7f) / 0.3f) * 12.0f;
     }
-
-    // Create AudioBlock for DSP processing
-    juce::dsp::AudioBlock<float> block(buffer);
 
     // Upsample
     auto oversampledBlock = oversampler.processSamplesUp(block);
@@ -318,6 +332,10 @@ void TapeAgeAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
             }
         }
     }
+
+    // Phase 4.4: Mix dry/wet signals AFTER all processing
+    // Equal-power crossfade with latency compensation
+    dryWetMixer.mixWetSamples(block);
 }
 
 juce::AudioProcessorEditor* TapeAgeAudioProcessor::createEditor()
