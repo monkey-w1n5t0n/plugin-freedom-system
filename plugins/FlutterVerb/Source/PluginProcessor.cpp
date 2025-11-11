@@ -107,6 +107,11 @@ void FlutterVerbAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     // Initialize per-channel LFO phase tracking
     wowPhase.resize(spec.numChannels, 0.0f);
     flutterPhase.resize(spec.numChannels, 0.0f);
+
+    // Phase 4.3: Prepare filter
+    toneFilter.prepare(spec);
+    toneFilter.reset();
+    currentFilterType = FilterType::None;
 }
 
 void FlutterVerbAudioProcessor::releaseResources()
@@ -135,6 +140,12 @@ void FlutterVerbAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     // Phase 4.2: Read AGE parameter for modulation depth
     auto* ageParam = parameters.getRawParameterValue("AGE");
     float ageValue = ageParam->load() / 100.0f;  // 0-100% → 0.0-1.0
+
+    // Phase 4.3: Read DRIVE and TONE parameters
+    auto* driveParam = parameters.getRawParameterValue("DRIVE");
+    auto* toneParam = parameters.getRawParameterValue("TONE");
+    float driveValue = driveParam->load() / 100.0f;  // 0-100% → 0.0-1.0
+    float toneValue = toneParam->load();  // -100 to +100
 
     // Configure reverb parameters
     juce::Reverb::Parameters reverbParams;
@@ -224,6 +235,81 @@ void FlutterVerbAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                 if (flutterPhase[channel] >= 2.0f * juce::MathConstants<float>::pi)
                     flutterPhase[channel] -= 2.0f * juce::MathConstants<float>::pi;
             }
+        }
+    }
+
+    // Phase 4.3: Apply tape saturation (after modulation, before filter)
+    if (driveValue > 0.0f)  // Only apply if DRIVE > 0
+    {
+        // Calculate gain: 1.0 at DRIVE=0%, 10.0 at DRIVE=100%
+        float gain = 1.0f + (driveValue * 9.0f);
+
+        const int numChannels = buffer.getNumChannels();
+        const int numSamples = buffer.getNumSamples();
+
+        for (int channel = 0; channel < numChannels; ++channel)
+        {
+            auto* channelData = buffer.getWritePointer(channel);
+
+            for (int sample = 0; sample < numSamples; ++sample)
+            {
+                // Apply tanh saturation
+                channelData[sample] = std::tanh(gain * channelData[sample]);
+            }
+        }
+    }
+
+    // Phase 4.3: Apply DJ-style filter (after saturation, before dry/wet mixer)
+    if (std::abs(toneValue) > 0.5f)  // Bypass zone: |TONE| <= 0.5%
+    {
+        float sampleRate = static_cast<float>(currentSampleRate);
+        bool isLowPass = (toneValue < 0.0f);
+
+        // Determine filter type and reset state if type changed
+        FilterType newFilterType = isLowPass ? FilterType::LowPass : FilterType::HighPass;
+        if (newFilterType != currentFilterType)
+        {
+            toneFilter.reset();  // Prevent burst artifacts on type transition
+            currentFilterType = newFilterType;
+        }
+
+        if (isLowPass)
+        {
+            // Low-pass filter (negative values: -100% to 0%)
+            // Exponential mapping: 200Hz (extreme) to 20kHz (center)
+            float normalizedValue = std::abs(toneValue) / 100.0f;  // 0.0 to 1.0
+            float cutoffHz = 20000.0f * std::pow(10.0f, -normalizedValue * std::log10(100.0f));
+            cutoffHz = juce::jlimit(200.0f, 20000.0f, cutoffHz);
+
+            *toneFilter.state = *juce::dsp::IIR::Coefficients<float>::makeLowPass(
+                sampleRate, cutoffHz, 0.707f  // Q = 0.707 (Butterworth)
+            );
+        }
+        else
+        {
+            // High-pass filter (positive values: 0% to +100%)
+            // Exponential mapping: 20Hz (center) to 10kHz (extreme)
+            float normalizedValue = toneValue / 100.0f;  // 0.0 to 1.0
+            float cutoffHz = 20.0f * std::pow(10.0f, normalizedValue * std::log10(500.0f));
+            cutoffHz = juce::jlimit(20.0f, 10000.0f, cutoffHz);
+
+            *toneFilter.state = *juce::dsp::IIR::Coefficients<float>::makeHighPass(
+                sampleRate, cutoffHz, 0.707f  // Q = 0.707 (Butterworth)
+            );
+        }
+
+        // Process buffer through filter
+        juce::dsp::AudioBlock<float> filterBlock(buffer);
+        juce::dsp::ProcessContextReplacing<float> filterContext(filterBlock);
+        toneFilter.process(filterContext);
+    }
+    else
+    {
+        // Reset filter state when entering bypass zone
+        if (currentFilterType != FilterType::None)
+        {
+            toneFilter.reset();
+            currentFilterType = FilterType::None;
         }
     }
 

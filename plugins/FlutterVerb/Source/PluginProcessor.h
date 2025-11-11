@@ -44,6 +44,11 @@ private:
     std::vector<float> flutterPhase; // Per-channel flutter LFO phase (0-2π)
     double currentSampleRate = 44100.0; // Store sample rate for LFO calculations
 
+    // Phase 4.3: Saturation and Filter
+    juce::dsp::ProcessorDuplicator<juce::dsp::IIR::Filter<float>, juce::dsp::IIR::Coefficients<float>> toneFilter;
+    enum class FilterType { None, LowPass, HighPass };
+    FilterType currentFilterType = FilterType::None;
+
     // APVTS comes AFTER DSP components
     juce::AudioProcessorValueTreeState parameters;
 

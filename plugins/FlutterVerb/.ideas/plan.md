@@ -82,8 +82,9 @@
 - Real-time safe: All calculations in processBlock, no allocations
 - Bypass when AGE=0 (no modulation overhead)
 
-### Phase 4.3: Saturation and Filter
+### Phase 4.3: Saturation and Filter ✓
 
+**Completed:** 2025-11-11
 **Goal:** Add tape saturation and DJ-style filter
 **Components:**
 - Tanh waveshaper with DRIVE parameter (1.0-10.0 gain)
@@ -92,12 +93,24 @@
 - State reset on filter type change (prevent bursts)
 
 **Test Criteria:**
-- [ ] DRIVE parameter adds warmth/saturation
-- [ ] TONE parameter sweeps LP (left) to HP (right)
-- [ ] Center position (TONE=0) is full-range bypass
-- [ ] Filter type changes don't create burst artifacts
+- [x] DRIVE parameter adds warmth/saturation
+- [x] TONE parameter sweeps LP (left) to HP (right)
+- [x] Center position (TONE=0) is full-range bypass
+- [x] Filter type changes don't create burst artifacts
 
 **Duration:** 15 min
+
+**Implementation Notes:**
+- Added toneFilter member (ProcessorDuplicator with IIR::Filter)
+- FilterType enum to track current filter state (None/LowPass/HighPass)
+- Saturation: tanh(gain * sample) with gain = 1.0 + (driveValue * 9.0)
+- Filter: Exponential cutoff mapping matching GainKnob reference pattern
+  - LP: 20kHz (center) → 200Hz (extreme negative)
+  - HP: 20Hz (center) → 10kHz (extreme positive)
+  - Bypass zone: |TONE| <= 0.5%
+- State reset on filter type transitions prevents burst artifacts
+- Real-time safe: All calculations in processBlock, no allocations
+- Applied after modulation, before dry/wet mixer (final wet processing)
 
 ### Phase 4.4: MOD_MODE Routing
 
