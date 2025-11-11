@@ -226,7 +226,7 @@ Algorithmic reverb with warm tape saturation applied only to the wet signal, plu
 
 ### FlutterVerb
 
-**Status:** 💡 **Ideated** (UI mockup complete)
+**Status:** 🚧 **Stage 0**
 **Created:** 2025-11-11
 **Type:** Audio Effect (Reverb)
 
@@ -263,6 +263,7 @@ Tape-driven plate reverb with extreme wow and flutter modulation for textured, a
 - **2025-11-11:** UI mockup v6 finalized (600×640px, TapeAge-inspired design)
 - **2025-11-11:** design-sync validation passed (no drift detected)
 - **2025-11-11:** Implementation files generated (ready for `/implement FlutterVerb`)
+- **2025-11-11 (Stage 0):** Research completed - DSP architecture documented
 
 **Known Issues:**
 - None
