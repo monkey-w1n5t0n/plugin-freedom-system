@@ -45,37 +45,27 @@ const dspResult = Task({
   subagent_type: "dsp-agent",
   model: "sonnet",  // Sonnet for simple DSP
   description: `Implement DSP for ${pluginName}`,
-  prompt: `
-You are dsp-agent. Your task is to implement audio processing for ${pluginName}.
+  prompt: `Implement audio processing for plugin at plugins/${pluginName}.
 
-**Plugin Name:** ${pluginName}
-**Plugin Location:** plugins/${pluginName}/
-**Complexity:** ${complexityScore} (single-pass implementation)
+Inputs:
+- architecture.md: plugins/${pluginName}/.ideas/architecture.md
+- parameter-spec.md: plugins/${pluginName}/.ideas/parameter-spec.md
+- plan.md: plugins/${pluginName}/.ideas/plan.md
+- Plugin name: ${pluginName}
+- Complexity: ${complexityScore} (single-pass)
 
-**Contract Files:**
+Tasks:
+1. Read architecture.md and identify all DSP components to implement
+2. Read parameter-spec.md to map parameters to DSP controls
+3. Add member variables for DSP components to PluginProcessor.h
+4. Implement prepareToPlay() - initialize DSP at sample rate
+5. Implement processBlock() with all DSP components from architecture.md
+6. Connect all parameters to their DSP controls
+7. Use juce::ScopedNoDenormals in processBlock for real-time safety
+8. Ensure no memory allocations in audio thread
+9. Return JSON report with components list and real-time safety status
 
-architecture.md:
-\`\`\`
-${architectureContent}
-\`\`\`
-
-parameter-spec.md:
-\`\`\`
-${parameterSpecContent}
-\`\`\`
-
-plan.md:
-\`\`\`
-${planContent}
-\`\`\`
-
-Follow the instructions in .claude/agents/dsp-agent.md exactly.
-
-Implement all DSP components from architecture.md in processBlock(), connect all parameters, ensure real-time safety (no allocations, use juce::ScopedNoDenormals).
-
-Build verification handled by plugin-workflow after agent completes.
-
-Return JSON report in the exact format specified in dsp-agent.md.
+Build verification handled by workflow after agent completes.
   `
 })
 
@@ -132,39 +122,31 @@ for (let i = 0; i < phases.length; i++) {
     subagent_type: "dsp-agent",
     model: model,  // Opus for complexity ≥4
     description: `Implement DSP Phase ${phase.number} for ${pluginName}`,
-    prompt: `
-You are dsp-agent. Your task is to implement Phase ${phase.number} of DSP for ${pluginName}.
+    prompt: `Implement Phase ${phase.number} of DSP for plugin at plugins/${pluginName}.
 
-**Plugin Name:** ${pluginName}
-**Plugin Location:** plugins/${pluginName}/
-**Complexity:** ${complexityScore}
-**Current Phase:** ${phase.number} - ${phase.description}
-**Total Phases:** ${phases.length}
+Inputs:
+- architecture.md: plugins/${pluginName}/.ideas/architecture.md
+- parameter-spec.md: plugins/${pluginName}/.ideas/parameter-spec.md
+- plan.md (Phase ${phase.number}): plugins/${pluginName}/.ideas/plan.md
+- Plugin name: ${pluginName}
+- Complexity: ${complexityScore}
+- Current phase: ${phase.number} - ${phase.description}
+- Total phases: ${phases.length}
 
-**Contract Files:**
+Tasks:
+1. Read plan.md and extract Phase ${phase.number} components only
+2. Read architecture.md for component specifications
+3. Add member variables for Phase ${phase.number} DSP components
+4. Implement Phase ${phase.number} components in processBlock()
+5. Build on existing code from previous phases (do not remove)
+6. Connect Phase ${phase.number} parameters only
+7. Ensure real-time safety (no allocations, use juce::ScopedNoDenormals)
+8. Update plan.md with phase completion timestamp
+9. Return JSON report with phase_completed: "${phase.number}"
 
-architecture.md:
-\`\`\`
-${architectureContent}
-\`\`\`
+CRITICAL: Implement ONLY Phase ${phase.number} components, preserve all previous phase code.
 
-parameter-spec.md:
-\`\`\`
-${parameterSpecContent}
-\`\`\`
-
-plan.md (Phase ${phase.number} section):
-\`\`\`
-${extractPhaseSection(planContent, phase.number)}
-\`\`\`
-
-Follow the instructions in .claude/agents/dsp-agent.md exactly.
-
-Implement ONLY the components specified for Phase ${phase.number}. Build on existing code from previous phases. Ensure real-time safety.
-
-After completion, update plan.md with phase completion timestamp.
-
-Return JSON report with phase_completed: "${phase.number}".
+Build verification handled by workflow after agent completes.
     `
   })
 

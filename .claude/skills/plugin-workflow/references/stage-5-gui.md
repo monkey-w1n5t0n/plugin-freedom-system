@@ -83,46 +83,35 @@ Invoke gui-agent once for complete UI integration:
 
 ```typescript
 const mockupPath = findLatestMockup(pluginName)
-const mockupContent = readFile(mockupPath)
 
 const guiResult = Task({
   subagent_type: "gui-agent",
   model: "sonnet",
   description: `Integrate WebView UI for ${pluginName}`,
-  prompt: `
-You are gui-agent. Your task is to integrate the finalized WebView UI for ${pluginName}.
+  prompt: `Integrate WebView UI for plugin at plugins/${pluginName}.
 
-**Plugin Name:** ${pluginName}
-**Plugin Location:** plugins/${pluginName}/
-**Finalized Mockup:** ${mockupPath}
-**Complexity:** ${complexityScore} (single-pass implementation)
+Inputs:
+- Finalized UI mockup: ${mockupPath}
+- parameter-spec.md: plugins/${pluginName}/.ideas/parameter-spec.md
+- creative-brief.md: plugins/${pluginName}/.ideas/creative-brief.md
+- Plugin name: ${pluginName}
+- Complexity: ${complexityScore} (single-pass)
 
-**Contract Files:**
+Tasks:
+1. Read finalized UI mockup from ${mockupPath}
+2. Create ui/public/ directory at plugins/${pluginName}/ui/public/
+3. Copy mockup to plugins/${pluginName}/ui/public/index.html
+4. Download JUCE frontend library to ui/public/juce-framework.js
+5. Add relay members to PluginEditor.h (CRITICAL ORDER: Relays first, then WebView, then Attachments)
+6. Implement parameter bindings in PluginEditor.cpp
+7. Add WebView initialization in PluginEditor constructor
+8. Update CMakeLists.txt to enable JUCE_WEB_BROWSER=1
+9. Verify all parameter IDs from parameter-spec.md match HTML element IDs exactly
+10. Return JSON report with binding count and member order verification
 
-Finalized UI mockup (${mockupPath}):
-\`\`\`html
-${mockupContent}
-\`\`\`
+⚠️ CRITICAL: Member declaration order (Relays → WebView → Attachments) prevents 90% of release build crashes.
 
-parameter-spec.md:
-\`\`\`
-${parameterSpecContent}
-\`\`\`
-
-creative-brief.md:
-\`\`\`
-${creativeBriefContent}
-\`\`\`
-
-Follow the instructions in .claude/agents/gui-agent.md exactly.
-
-Copy finalized mockup to ui/public/index.html, download JUCE frontend library, create relay members in PluginEditor.h (CRITICAL: Relays → WebView → Attachments order), implement parameter bindings, update CMakeLists.txt for WebView.
-
-Build verification handled by plugin-workflow after agent completes.
-
-⚠️ CRITICAL: Member declaration order prevents 90% of release build crashes.
-
-Return JSON report in the exact format specified in gui-agent.md.
+Build verification handled by workflow after agent completes.
   `
 })
 

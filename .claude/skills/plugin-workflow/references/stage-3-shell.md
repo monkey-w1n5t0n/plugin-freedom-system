@@ -44,9 +44,36 @@ cat plugins/[PluginName]/.ideas/architecture.md
 
 Call shell-agent subagent with complete specification:
 
-**CRITICAL:** Use JUCE 8 ParameterID format: `juce::ParameterID { "id", 1 }`
+```typescript
+const shellResult = Task({
+  subagent_type: "shell-agent",
+  model: "sonnet",
+  description: `Implement parameters for ${pluginName}`,
+  prompt: `Implement parameter system for plugin at plugins/${pluginName}.
 
-shell-agent implements:
+Inputs:
+- parameter-spec.md: plugins/${pluginName}/.ideas/parameter-spec.md
+- creative-brief.md: plugins/${pluginName}/.ideas/creative-brief.md
+- architecture.md: plugins/${pluginName}/.ideas/architecture.md
+- Plugin name: ${pluginName}
+
+Tasks:
+1. Read parameter-spec.md and extract ALL parameters
+2. Add APVTS member to PluginProcessor.h
+3. Implement createParameterLayout() with ALL parameters from spec
+4. Use JUCE 8 ParameterID format: juce::ParameterID { "id", 1 }
+5. Add state management (getStateInformation/setStateInformation)
+6. Verify parameter count matches spec exactly (zero-drift)
+7. Return JSON report with parameter list and count
+
+CRITICAL: All parameter IDs must match parameter-spec.md exactly (case-sensitive).
+
+Build verification handled by workflow after agent completes.
+  `
+})
+```
+
+**What shell-agent implements:**
 - APVTS with ALL parameters from parameter-spec.md
 - Parameter IDs matching spec exactly (zero-drift)
 - State management (save/load)

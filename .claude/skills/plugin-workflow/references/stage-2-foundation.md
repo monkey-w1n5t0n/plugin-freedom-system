@@ -36,34 +36,25 @@ const foundationResult = Task({
   subagent_type: "foundation-agent",
   model: "sonnet",
   description: `Create build system for ${pluginName}`,
-  prompt: `
-You are foundation-agent. Your task is to create the JUCE plugin build system and verify compilation for ${pluginName}.
+  prompt: `Create foundation build for plugin at plugins/${pluginName}.
 
-**Plugin Name:** ${pluginName}
-**Plugin Location:** plugins/${pluginName}/
+Inputs:
+- creative-brief.md: plugins/${pluginName}/.ideas/creative-brief.md
+- architecture.md: plugins/${pluginName}/.ideas/architecture.md
+- plan.md: plugins/${pluginName}/.ideas/plan.md
+- Plugin name: ${pluginName}
 
-**Contract Files:**
+Tasks:
+1. Read creative-brief.md and extract PRODUCT_NAME
+2. Read architecture.md and determine plugin type (Audio Effect | Synth | Utility)
+3. Create CMakeLists.txt at plugins/${pluginName}/CMakeLists.txt with JUCE 8 integration
+4. Create Source/PluginProcessor.h at plugins/${pluginName}/Source/PluginProcessor.h
+5. Create Source/PluginProcessor.cpp at plugins/${pluginName}/Source/PluginProcessor.cpp
+6. Create Source/PluginEditor.h at plugins/${pluginName}/Source/PluginEditor.h
+7. Create Source/PluginEditor.cpp at plugins/${pluginName}/Source/PluginEditor.cpp
+8. Return JSON report with status and file list
 
-creative-brief.md:
-\`\`\`
-${creativeBriefContent}
-\`\`\`
-
-architecture.md:
-\`\`\`
-${architectureContent}
-\`\`\`
-
-plan.md:
-\`\`\`
-${planContent}
-\`\`\`
-
-Follow the instructions in .claude/agents/foundation-agent.md exactly.
-
-Extract PRODUCT_NAME from creative-brief, determine plugin type from architecture, create CMakeLists.txt, create minimal PluginProcessor and PluginEditor classes, build with --no-install flag.
-
-Return JSON report in the exact format specified in foundation-agent.md.
+Build verification handled by workflow after agent completes.
   `
 })
 ```
