@@ -102,37 +102,43 @@ Choose (1-3): _
 
 ---
 
-## Phase 1: Load Context
+## Phase 1: Load Context from Creative Brief
 
-**Check for existing documentation:**
+**CRITICAL: Always read creative-brief.md before starting.**
 
 ```bash
 test -f "plugins/$PLUGIN_NAME/.ideas/creative-brief.md"
-find "plugins/$PLUGIN_NAME/.ideas/improvements/" -name "*.md"
-test -d "plugins/$PLUGIN_NAME/Source/"  # For redesigns
 ```
 
-**Extract from creative-brief.md:**
+**Extract UI context from creative-brief.md:**
 
-- Plugin type (compressor, EQ, reverb, synth, utility)
-- Parameters (names, types, ranges, defaults)
-- UI vision (layout preferences, visual style)
-- Colors (brand colors, dark/light theme)
-- Special elements (visualizers, waveforms, custom graphics)
+- **UI Concept section:** Layout preferences, visual style mentions
+- **Parameters:** Count and types (determines control layout)
+- **Plugin type:** Effect/synth/utility (affects typical layouts)
+- **Vision section:** Any visual references or inspirations
 
 **See:** `references/context-extraction.md` for detailed extraction guidelines
 
-## Phase 1.5: Free-Form UI Vision
+## Phase 1.5: Context-Aware Initial Prompt
 
-**Prompt user:**
+**Adapt the prompt based on what's in the creative brief:**
 
+**If rich UI details exist:**
 ```
-What should the UI look like?
-
-Describe your vision - layout, colors, style, special elements. I'll ask follow-ups for anything missing.
+I see you want [extracted description from UI Concept] for [PluginName]. Let's refine that vision. Tell me more about the layout, control arrangement, and visual elements you're imagining.
 ```
 
-**Why this phase exists:** Users often have clear visions but struggle with structured questions. Free-form capture lets them express ideas naturally.
+**If minimal UI details:**
+```
+Let's design the UI for [PluginName]. You mentioned it's a [type] with [X] parameters. What layout and style are you envisioning?
+```
+
+**If zero UI context:**
+```
+Let's design the UI for [PluginName]. What do you envision? (layout, style, controls, visual elements)
+```
+
+**Why context-aware:** Don't ask the user to repeat information they already provided in the creative brief. Build on what they said.
 
 **Listen for:**
 
@@ -143,21 +149,172 @@ Describe your vision - layout, colors, style, special elements. I'll ask follow-
 
 **Capture verbatim notes before moving to targeted questions.**
 
-## Phase 2: Targeted Design Questions
+## Phase 2: Gap Analysis and Question Prioritization
 
-**Ask only about gaps not covered in Phase 1.5.** One question at a time, wait for answers.
+**Question Priority Tiers:**
 
-**Question categories:**
+- **Tier 1 (Critical):** Layout structure, control types
+- **Tier 2 (Visual):** Visual style, key visual elements (meters, waveforms, displays)
+- **Tier 3 (Polish):** Colors, typography, animations, interactive features
 
-1. **Window Size** - If not mentioned (default: 600x400 for effects)
-2. **Layout Organization** - If not described (grid, vertical/horizontal sections, custom)
-3. **Control Style** - If not specified (rotary knobs, sliders, buttons)
-4. **Color Scheme** - If not provided (dark, light, custom)
-5. **Special Elements** - If mentioned but vague (clarify implementation details)
+**Extract from Phase 1.5 response and creative brief, then identify gaps:**
 
-**See:** `references/design-questions.md` for detailed question templates and defaults
+1. Parse user's UI description
+2. Check which tiers are covered
+3. Identify missing critical/visual information
+4. Never ask about already-provided information
 
-## Phase 3: Generate Hierarchical YAML
+**Example of context-aware extraction:**
+
+```
+Creative brief UI Concept:
+"Vintage aesthetic with three knobs"
+
+Phase 1.5 user response:
+"I want the knobs arranged horizontally, with a tape reel animation in the background"
+
+Extracted:
+- Layout: horizontal arrangement ✓
+- Control type: knobs ✓
+- Visual style: vintage ✓
+- Special element: tape reel animation ✓
+
+Gaps identified:
+- Window size? (Tier 1)
+- Vintage style details? (Tier 2)
+- Knob style (large vintage vs small precise)? (Tier 2)
+- VU meters or other feedback? (Tier 2)
+```
+
+## Phase 3: Question Batch Generation
+
+**Generate exactly 4 questions using AskUserQuestion based on identified gaps.**
+
+**Rules:**
+- If 4+ gaps exist: ask top 4 by tier priority
+- If fewer gaps exist: pad with "nice to have" tier 3 questions
+- Provide meaningful options (not just open text prompts)
+- Always include "Other" option for custom input
+- Users can skip questions via "Other" option and typing "skip"
+
+**Example question batch (via AskUserQuestion):**
+
+```
+Question 1:
+  question: "Layout structure for the three knobs?"
+  header: "Layout"
+  options:
+    - label: "Horizontal row of knobs", description: "Classic single-row layout"
+    - label: "Vertical stack", description: "Narrow, tall layout"
+    - label: "Triangle arrangement", description: "Two bottom, one top"
+    - label: "Other", description: "Custom arrangement"
+
+Question 2:
+  question: "Vintage style details?"
+  header: "Aesthetic"
+  options:
+    - label: "Brushed metal", description: "Industrial, professional"
+    - label: "Wood panel", description: "Warm, classic studio"
+    - label: "Reel-to-reel theme", description: "Tape machine aesthetic"
+    - label: "Other", description: "Different vintage style"
+
+Question 3:
+  question: "Visual feedback elements?"
+  header: "Meters/displays"
+  options:
+    - label: "VU meters", description: "Needle-style level indicators"
+    - label: "Tape reel animation", description: "Spinning reel visual"
+    - label: "Both VU and reels", description: "Full tape machine feel"
+    - label: "None (controls only)", description: "Clean, minimal"
+
+Question 4:
+  question: "Knob style?"
+  header: "Controls"
+  options:
+    - label: "Large vintage knobs", description: "60s-70s style, prominent"
+    - label: "Small precise knobs", description: "Modern, technical"
+    - label: "Chicken-head style", description: "Classic pointer knobs"
+    - label: "Other", description: "Different knob style"
+```
+
+**After receiving answers:**
+1. Accumulate context with previous responses
+2. Re-analyze gaps
+3. Proceed to decision gate
+
+### Example: Context-Aware UI Questions
+
+```
+Creative brief UI Concept:
+"Vintage aesthetic with three knobs"
+
+Phase 1.5 user response:
+"I want the knobs arranged horizontally, with a tape reel animation in the background"
+
+Extracted:
+- Layout: horizontal arrangement ✓
+- Control type: knobs ✓
+- Visual style: vintage ✓
+- Special element: tape reel animation ✓
+
+Gaps identified (4 needed):
+- Layout structure specifics? (Tier 1)
+- Vintage style details? (Tier 2)
+- Knob style? (Tier 2)
+- VU meters or other feedback? (Tier 2)
+
+Question Batch 1 (via AskUserQuestion):
+1. "Layout structure for the three knobs?" → [Horizontal row, Vertical stack, Triangle arrangement, Other]
+2. "Vintage style details?" → [Brushed metal, Wood panel, Reel-to-reel theme, Other]
+3. "Visual feedback elements?" → [VU meters, Tape reel animation, Both, None]
+4. "Knob style?" → [Large vintage knobs, Small precise knobs, Chicken-head style, Other]
+
+[Then decision gate]
+
+If user chooses "Ask me 4 more questions":
+- User answered: "Horizontal row", "Reel-to-reel theme", "Both VU and reels", "Large vintage knobs"
+
+Updated context:
+- Layout: horizontal row of knobs ✓
+- Visual style: reel-to-reel theme ✓
+- Controls: large vintage knobs ✓
+- Visual feedback: VU meters + tape reel animation ✓
+
+New gaps for Batch 2:
+- Window size? (Tier 1)
+- Color scheme? (Tier 3)
+- Reel animation behavior? (Tier 3)
+- VU meter style? (Tier 3)
+
+Question Batch 2:
+1. "Window size?" → [Compact 500x300, Standard 600x400, Large 800x500, Other]
+2. "Color scheme?" → [Warm sepia/brown, Cool metal/gray, Classic black/orange, Other]
+3. "Reel animation?" → [Speed matches tempo, Speed matches delay time, Always spinning, Other]
+4. "VU meter style?" → [Needle style, LED bars, Classic backlit, Other]
+
+[Then decision gate again]
+```
+
+## Phase 3.5: Decision Gate
+
+**Use AskUserQuestion with 3 options after each question batch:**
+
+```
+Question:
+  question: "Ready to finalize the mockup design?"
+  header: "Next step"
+  options:
+    - label: "Yes, finalize it", description: "Generate YAML and test HTML"
+    - label: "Ask me 4 more questions", description: "Continue refining"
+    - label: "Let me add more context first", description: "Provide additional details"
+
+Route based on answer:
+- Option 1 → Proceed to Phase 4 (generate YAML and test HTML)
+- Option 2 → Return to Phase 2 (re-analyze gaps, generate next 4 questions)
+- Option 3 → Collect free-form text, merge with context, return to Phase 2
+```
+
+## Phase 4: Generate Hierarchical YAML
 
 **Create:** `plugins/[Name]/.ideas/mockups/v[N]-ui.yaml`
 
@@ -199,7 +356,7 @@ controls:
 
 **See:** `assets/ui-yaml-template.yaml` for complete template structure
 
-## Phase 4: Generate Browser Test HTML
+## Phase 5: Generate Browser Test HTML
 
 **Create:** `plugins/[Name]/.ideas/mockups/v[N]-ui-test.html`
 
@@ -216,7 +373,7 @@ controls:
 
 **See:** `references/browser-testing.md` for testing guidelines
 
-## Phase 4.3: Validate WebView Constraints (Before Decision Menu)
+## Phase 5.3: Validate WebView Constraints (Before Decision Menu)
 
 **CRITICAL:** Validate generated HTML against WebView constraints before presenting to user.
 
@@ -244,9 +401,9 @@ grep -q 'contextmenu.*preventDefault' v[N]-ui-test.html
 
 ---
 
-## ⚠️ CRITICAL STOP POINT - Phase 4.5: Design Decision Menu
+## ⚠️ CRITICAL STOP POINT - Phase 5.5: Design Decision Menu
 
-**DO NOT PROCEED TO PHASE 5 WITHOUT USER CONFIRMATION**
+**DO NOT PROCEED TO PHASE 6 WITHOUT USER CONFIRMATION**
 
 After generating YAML + test HTML, present this decision menu:
 
@@ -277,8 +434,8 @@ Choose (1-8): _
   - Detects drift (parameter mismatches, missing features, style divergence)
   - Returns with findings, user resolves any issues
   - After resolution, return to this decision menu
-- **Option 2**: User gives feedback → Return to Phase 3 with new version number (v2, v3, etc.)
-- **Option 3**: User approves → Proceed to Phase 5-8 (generate remaining 5 files)
+- **Option 2**: User gives feedback → Return to Phase 2 with new version number (v2, v3, etc.)
+- **Option 3**: User approves → Proceed to Phase 6-9 (generate remaining 5 files)
 - **Option 4**: Save aesthetic → Invoke ui-template-library skill with "save" operation
   ```
   Invoke Skill tool:
@@ -286,23 +443,23 @@ Choose (1-8): _
   - prompt: "Save aesthetic from plugins/[PluginName]/.ideas/mockups/v[N]-ui.html"
   ```
   After saving, return to decision menu
-- **Option 5**: Save aesthetic first, then proceed to Phase 5-8
+- **Option 5**: Save aesthetic first, then proceed to Phase 6-9
   ```
   1. Invoke ui-template-library "save" operation
   2. Wait for confirmation
-  3. Proceed to Phase 5-8 (generate implementation files)
+  3. Proceed to Phase 6-9 (generate implementation files)
   ```
-- **Option 5**: Offer to open test HTML in browser for interactive review
-- **Option 6**: Validate WebView constraints (run Phase 4.3 checks again)
-- **Option 7**: Other
+- **Option 6**: Offer to open test HTML in browser for interactive review
+- **Option 7**: Validate WebView constraints (run Phase 5.3 checks again)
+- **Option 8**: Other
 
-**Only execute Phases 5-8 if user chose option 2 (finalize).**
+**Only execute Phases 6-10 if user chose option 3 (finalize).**
 
 ---
 
-## Phase 5: Generate Production HTML (After Finalization Only)
+## Phase 6: Generate Production HTML (After Finalization Only)
 
-**Prerequisites:** User confirmed design in Phase 4.5 decision menu.
+**Prerequisites:** User confirmed design in Phase 5.5 decision menu.
 
 **Create:** `plugins/[Name]/.ideas/mockups/v[N]-ui.html`
 
@@ -320,7 +477,7 @@ Choose (1-8): _
 
 ### Parameter ID Extraction
 
-Parse finalized HTML for JUCE parameter bindings:
+Parse finalized HTML from Phase 5 for JUCE parameter bindings:
 
 ```javascript
 // Extract parameter IDs from JavaScript code patterns
@@ -358,9 +515,9 @@ for (const match of comboMatches) {
 
 **See:** `references/ui-design-rules.md` for complete constraints
 
-## Phase 6: Generate C++ Boilerplate (After Finalization Only)
+## Phase 7: Generate C++ Boilerplate (After Finalization Only)
 
-**Prerequisites:** User confirmed design in Phase 4.5 decision menu.
+**Prerequisites:** User confirmed design in Phase 5.5 decision menu.
 
 **Create:**
 - `plugins/[Name]/.ideas/mockups/v[N]-PluginEditor.h`
@@ -377,7 +534,7 @@ for (const match of comboMatches) {
 **{{RELAY_DECLARATIONS}}** → Generate relay declarations for each parameter:
 
 ```cpp
-// For each parameter from Phase 5 extraction:
+// For each parameter from Phase 6 extraction:
 // - Slider/Knob → std::unique_ptr<juce::WebSliderRelay> [name]Relay;
 // - Toggle      → std::unique_ptr<juce::WebToggleButtonRelay> [name]Relay;
 // - Dropdown    → std::unique_ptr<juce::WebComboBoxRelay> [name]Relay;
@@ -410,7 +567,7 @@ std::unique_ptr<juce::WebComboBoxParameterAttachment> modeAttachment;
 **{{RELAY_CREATION}}** → Generate relay creation code (before WebView):
 
 ```cpp
-// For each parameter (use parameter IDs from Phase 5 extraction):
+// For each parameter (use parameter IDs from Phase 6 extraction):
 gainRelay = std::make_unique<juce::WebSliderRelay>("GAIN");
 toneRelay = std::make_unique<juce::WebSliderRelay>("TONE");
 bypassRelay = std::make_unique<juce::WebToggleButtonRelay>("BYPASS");
@@ -484,9 +641,9 @@ setResizable(false, false);  // From YAML window.resizable
 
 **See:** `assets/webview-templates/` for complete template files
 
-## Phase 7: Generate Build Configuration (After Finalization Only)
+## Phase 8: Generate Build Configuration (After Finalization Only)
 
-**Prerequisites:** User confirmed design in Phase 4.5 decision menu.
+**Prerequisites:** User confirmed design in Phase 5.5 decision menu.
 
 **Create:** `plugins/[Name]/.ideas/mockups/v[N]-CMakeLists.txt`
 
@@ -526,9 +683,9 @@ juce_add_binary_data(${PLUGIN_NAME}_UIResources
 
 **See:** `assets/webview-templates/CMakeLists-webview-snippet.cmake` for complete template
 
-## Phase 8: Generate Integration Checklist (After Finalization Only)
+## Phase 9: Generate Integration Checklist (After Finalization Only)
 
-**Prerequisites:** User confirmed design in Phase 4.5 decision menu.
+**Prerequisites:** User confirmed design in Phase 5.5 decision menu.
 
 **Create:** `plugins/[Name]/.ideas/mockups/v[N]-integration-checklist.md`
 
@@ -591,9 +748,9 @@ juce_add_binary_data(${PLUGIN_NAME}_UIResources
 
 **See:** `assets/integration-checklist-template.md` for full template
 
-## Phase 9: Finalize parameter-spec.md (After Finalization Only)
+## Phase 10: Finalize parameter-spec.md (After Finalization Only)
 
-**Prerequisites:** User confirmed design in Phase 4.5 decision menu AND this is the first mockup version.
+**Prerequisites:** User confirmed design in Phase 5.5 decision menu AND this is the first mockup version.
 
 **If this is the first UI mockup (v1):**
 

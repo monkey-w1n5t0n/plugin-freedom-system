@@ -45,7 +45,7 @@ grep "^### $PLUGIN_NAME$" PLUGINS.md
      Plugin [PluginName] not found in PLUGINS.md.
      ```
 
-## Phase 0: Vagueness Detection
+## Phase 0: Specificity Detection
 
 **Check if request is specific:**
 
@@ -62,21 +62,96 @@ Request IS vague if lacking above:
 - "UI feels cramped"
 - "make it sound warmer"
 
-**If vague, present choice:**
+**Assess specificity:**
+
+- **Specific enough (1-2 clarification questions max):** Proceed to Phase 0.3 (4-question clarification batch)
+- **Vague:** Present choice using AskUserQuestion:
 
 ```
-Your request is somewhat vague. How should I proceed?
+Question:
+  question: "Your request needs more detail. How should I proceed?"
+  header: "Approach"
+  options:
+    - label: "Brainstorm approaches together", description: "I'll ask questions to explore options"
+    - label: "Implement something reasonable", description: "I'll investigate and propose a solution"
 
-1. Brainstorm approaches first (recommended) ← Explore options together
-2. Implement with my best assumptions ← I'll investigate and propose a solution
-
-Choose (1-2): _
-```
-
-**Handle responses:**
-
-- Option 1 → Invoke `plugin-ideation` skill in improvement mode, then return here when ready
+Handle responses:
+- Option 1 → Invoke plugin-ideation skill in improvement mode, then return here when ready
 - Option 2 → Proceed to Phase 0.5 (Investigation)
+```
+
+## Phase 0.3: Clarification Questions (For Specific Requests)
+
+**If request is specific enough, ask 4 clarification questions using AskUserQuestion:**
+
+**Question Priority Tiers:**
+
+- **Tier 1 (Critical):** Current behavior, proposed solution, breaking changes
+- **Tier 2 (Implementation):** Testing approach, backward compatibility, version impact
+- **Tier 3 (Context):** Rationale, success metrics, alternative approaches
+
+**Generate exactly 4 questions based on what's missing:**
+
+```
+Question 1:
+  question: "Current behavior that needs changing?"
+  header: "Problem"
+  options:
+    - label: "Describe the issue", description: "Explain what's wrong or limited"
+    - label: "Show example", description: "Provide specific example"
+    - label: "Already described", description: "Skip this question"
+    - label: "Other", description: "Different approach"
+
+Question 2:
+  question: "Proposed solution?"
+  header: "Fix"
+  options:
+    - label: "Add new feature", description: "Extend functionality"
+    - label: "Modify existing", description: "Change current behavior"
+    - label: "Remove/replace", description: "Take something out"
+    - label: "Other", description: "Different solution"
+
+Question 3:
+  question: "Testing approach?"
+  header: "Verification"
+  options:
+    - label: "Load test session", description: "Use existing project"
+    - label: "A/B compare", description: "Before/after comparison"
+    - label: "Measure performance", description: "CPU/memory metrics"
+    - label: "Other", description: "Different testing method"
+
+Question 4:
+  question: "Breaking changes acceptable?"
+  header: "Compatibility"
+  options:
+    - label: "Yes", description: "Can break existing presets/sessions"
+    - label: "Must maintain compatibility", description: "No breaking changes"
+    - label: "Only if worth it", description: "Evaluate trade-offs"
+    - label: "Other", description: "Different constraint"
+```
+
+**After receiving answers:**
+1. Merge with initial request
+2. Proceed to decision gate
+
+## Phase 0.4: Decision Gate (For Specific Requests)
+
+**Use AskUserQuestion with 3 options after clarification questions:**
+
+```
+Question:
+  question: "Ready to implement this improvement?"
+  header: "Next step"
+  options:
+    - label: "Yes, implement it", description: "Proceed with implementation"
+    - label: "Ask me 4 more questions", description: "Need more clarification"
+    - label: "Let me add more context first", description: "Provide additional details"
+
+Route based on answer:
+- Option 1 → Proceed to Phase 0.5 (Investigation)
+- Option 2 → Return to Phase 0.3 (re-analyze gaps, generate next 4 questions)
+- Option 3 → Collect free-form text, merge with context, return to Phase 0.3
+```
 
 ## Phase 0.5: Investigation (3-Tier)
 

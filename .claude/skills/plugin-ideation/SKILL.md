@@ -43,72 +43,131 @@ Tell me about your plugin idea. Share as much or as little as you want—I'll as
 - Use cases and target users
 - Inspirations and references
 
-### Phase 2: Targeted Refinement
+### Phase 2: Gap Analysis and Question Prioritization
 
-Ask **only** about gaps not covered in Phase 1. One question at a time.
+**Question Priority Tiers:**
 
-**If plugin type not mentioned:**
-```
-Is this an effect, synthesizer, or utility plugin?
-```
+- **Tier 1 (Critical):** Plugin type (effect/synth/utility), core concept (what it does)
+- **Tier 2 (Functional):** Parameters and ranges, processing behavior, signal flow
+- **Tier 3 (Context):** Use cases, inspirations, special features (presets, MIDI, modulation)
+- **Tier 4 (NEVER ASK):** UI details - if user volunteers UI info, capture it in the brief but NEVER prompt for UI in ideation phase
 
-**If core concept unclear:**
-```
-What's the main sonic character or processing goal?
-```
+**Extract from Phase 1 response, then identify gaps:**
 
-**If parameters not discussed:**
-```
-What parameters would you like to control? (ranges, defaults)
-```
+1. Parse user's free-form description
+2. Check which tiers are covered
+3. Identify missing critical/functional information
+4. Never ask about already-provided information
 
-**If UI not mentioned:**
-```
-Any preferences for the visual style or layout?
-```
-
-**If use cases unclear:**
-```
-What situations would you use this in? (mixing, production, creative effects, etc.)
-```
-
-**Adaptive listening:** Skip any question if information was already provided.
-
-### Phase 3: Progress Checkpoints
-
-After extracting ~5-7 pieces of information, show summary:
+**Example of smart extraction:**
 
 ```
-Here's what we have so far:
+User: "I want a tape delay with wow and flutter modulation. Should have three knobs and a vintage aesthetic."
 
-Plugin: [Name]
-Type: [Effect/Synth/Utility]
-Core Concept: [Description]
-Parameters: [List]
-UI Vision: [Description]
-Use Cases: [Scenarios]
+Extracted:
+- Type: Effect ✓
+- Core concept: Tape delay with modulation ✓
+- Parameters: wow, flutter (2 mentioned, 3 total) ✓
+- UI: vintage, three knobs ✓ (capture but don't expand)
 
-What would you like to do?
-1. Continue exploring (dive deeper into specific areas)
-2. Finalize creative brief (recommended if complete)
-3. Ask me about [suggest area for expansion]
-4. Other
-
-Choose (1-4): _
+Gaps identified:
+- What should the third knob control? (Tier 2)
+- What ranges for wow/flutter? (Tier 2)
+- Specific tape reference? (Tier 3)
+- Primary use case? (Tier 3)
 ```
 
-If user chooses to continue, ask:
-```
-Which area would you like to explore more?
-1. Parameters and ranges
-2. UI and visual design
-3. DSP approach and algorithms
-4. Use cases and workflow
-5. Inspirations and references
-6. Other
+### Phase 3: Question Batch Generation
 
-Choose (1-6): _
+**Generate exactly 4 questions using AskUserQuestion based on identified gaps.**
+
+**Rules:**
+- If 4+ gaps exist: ask top 4 by tier priority
+- If fewer gaps exist: pad with "nice to have" tier 3 questions
+- Provide meaningful options (not just open text prompts)
+- Always include "Other" option for custom input
+- Users can skip questions via "Other" option and typing "skip"
+
+**Example question batch (via AskUserQuestion):**
+
+For the tape delay example above:
+
 ```
+Question 1:
+  question: "What should the third knob control?"
+  header: "Third control"
+  options:
+    - label: "Mix", description: "Blend dry/wet signal"
+    - label: "Feedback", description: "Delay regeneration amount"
+    - label: "Tone", description: "High-frequency filtering"
+    - label: "Other", description: "Custom input"
+
+Question 2:
+  question: "What ranges for wow and flutter?"
+  header: "Modulation depth"
+  options:
+    - label: "Subtle 0-5%", description: "Natural tape variation"
+    - label: "Moderate 0-15%", description: "Noticeable character"
+    - label: "Extreme 0-50%", description: "Creative warping"
+    - label: "Other", description: "Custom ranges"
+
+Question 3:
+  question: "Any specific tape reference?"
+  header: "Inspiration"
+  options:
+    - label: "Echoplex 1950s-60s", description: "Classic tube preamp warmth"
+    - label: "Space Echo 1970s-80s", description: "Spring reverb character"
+    - label: "Modern tape sim", description: "Clean, controllable"
+    - label: "Other", description: "Different reference or none"
+
+Question 4:
+  question: "Primary use case?"
+  header: "Usage"
+  options:
+    - label: "Mixing depth", description: "Subtle layering and space"
+    - label: "Creative effects", description: "Aggressive, noticeable"
+    - label: "Both", description: "Versatile range"
+    - label: "Other", description: "Different use case"
+```
+
+**After receiving answers:**
+1. Accumulate context with previous responses
+2. Re-analyze gaps
+3. Proceed to decision gate
+
+### Phase 3.5: Decision Gate
+
+**Use AskUserQuestion with 3 options after each question batch:**
+
+```
+Question:
+  question: "Ready to finalize the creative brief?"
+  header: "Next step"
+  options:
+    - label: "Yes, finalize it", description: "Create creative-brief.md"
+    - label: "Ask me 4 more questions", description: "Continue refining"
+    - label: "Let me add more context first", description: "Provide additional details"
+
+Route based on answer:
+- Option 1 → Proceed to Phase 4 (document creation)
+- Option 2 → Return to Phase 2 (re-analyze gaps, generate next 4 questions)
+- Option 3 → Collect free-form text, merge with context, return to Phase 2
+```
+
+**Context accumulation example:**
+
+After Batch 1 answers: "Feedback", "Moderate 0-15%", "Space Echo", "Both"
+
+Updated context:
+- Parameters: wow (0-15%), flutter (0-15%), feedback (need range) ✓
+- Inspiration: Space Echo ✓
+- Use case: versatile ✓
+
+New gaps for Batch 2:
+- Feedback range? (Tier 2)
+- Delay time range? (Tier 2)
+- Tempo sync? (Tier 3)
+- Specific Space Echo model reference? (Tier 3)
 
 ### Phase 4: Document Creation
 
@@ -291,62 +350,93 @@ Describe what you want to change, add, or fix. I'll ask follow-ups for anything 
 - Backward compatibility concerns
 - How to test success
 
-### Phase 2: Targeted Refinement
+### Phase 2: Gap Analysis and Question Prioritization
 
-Ask **only** about gaps:
+**Question Priority Tiers:**
 
-**If aspect unclear:**
-```
-Which aspect would you like to improve?
-1. Audio processing (DSP)
-2. Parameters (add/modify/remove)
-3. User interface (layout/controls)
-4. Features (presets, MIDI, etc.)
-5. Performance or stability
-6. Other
-```
+- **Tier 1 (Critical):** What aspect (DSP/Parameters/UI/Features), current state vs proposed change
+- **Tier 2 (Implementation):** Implementation details, testing criteria, backward compatibility
+- **Tier 3 (Context):** Rationale, success metrics, version impact
 
-**If current state not described:**
-```
-What's the current behavior you want to change?
-```
+**Extract from Phase 1 response, then identify gaps:**
 
-**If proposed change vague:**
-```
-Specifically, what should change? (be as detailed as possible)
-```
+1. Parse user's improvement description
+2. Check which tiers are covered
+3. Identify missing critical information
+4. Never ask about already-provided information
 
-**If testing criteria not mentioned:**
-```
-How will we know the improvement is successful?
-```
+### Phase 3: Question Batch Generation
 
-**If backward compatibility not discussed:**
-```
-Should this maintain compatibility with existing presets/sessions?
-```
+**Generate exactly 4 questions using AskUserQuestion based on identified gaps.**
 
-### Phase 3: Progress Checkpoints
+**Rules:**
+- If 4+ gaps exist: ask top 4 by tier priority
+- If fewer gaps exist: pad with "nice to have" tier 3 questions
+- Provide meaningful options (not just open text prompts)
+- Always include "Other" option for custom input
 
-After extracting key information:
+**Example question batch (via AskUserQuestion):**
 
 ```
-Here's what we have:
+Question 1:
+  question: "Which aspect would you like to improve?"
+  header: "Aspect"
+  options:
+    - label: "Audio processing (DSP)", description: "Change how it sounds"
+    - label: "Parameters", description: "Add/modify/remove controls"
+    - label: "User interface", description: "Layout or visual changes"
+    - label: "Features/workflow", description: "Presets, MIDI, utilities"
 
-Plugin: [PluginName]
-Improvement: [Name]
-Aspect: [DSP/Parameters/UI/Features]
-Current State: [Description]
-Proposed Change: [Description]
-Success Criteria: [How to verify]
-Compatibility: [Breaking/Non-breaking]
+Question 2:
+  question: "What's the current behavior you want to change?"
+  header: "Current state"
+  options:
+    - label: "It's broken", description: "Bug or error"
+    - label: "It's limited", description: "Missing functionality"
+    - label: "It's inefficient", description: "Performance issue"
+    - label: "Other", description: "Different issue"
 
-What would you like to do?
-1. Finalize improvement brief (recommended)
-2. Explore more details
-3. Other
+Question 3:
+  question: "Version impact of this change?"
+  header: "Version bump"
+  options:
+    - label: "Patch (bugfix)", description: "v1.0.0 → v1.0.1"
+    - label: "Minor (new feature)", description: "v1.0.0 → v1.1.0"
+    - label: "Major (breaking change)", description: "v1.0.0 → v2.0.0"
+    - label: "Other", description: "Not sure"
 
-Choose (1-3): _
+Question 4:
+  question: "How to verify success?"
+  header: "Testing"
+  options:
+    - label: "A/B test audio", description: "Compare before/after sound"
+    - label: "Check parameter behavior", description: "Test controls work"
+    - label: "Visual inspection", description: "UI looks correct"
+    - label: "Other", description: "Different testing approach"
+```
+
+**After receiving answers:**
+1. Accumulate context with previous responses
+2. Re-analyze gaps
+3. Proceed to decision gate
+
+### Phase 3.5: Decision Gate
+
+**Use AskUserQuestion with 3 options after each question batch:**
+
+```
+Question:
+  question: "Ready to finalize the improvement brief?"
+  header: "Next step"
+  options:
+    - label: "Yes, finalize it", description: "Create improvement proposal"
+    - label: "Ask me 4 more questions", description: "Continue refining"
+    - label: "Let me add more context first", description: "Provide additional details"
+
+Route based on answer:
+- Option 1 → Proceed to Phase 4 (document creation)
+- Option 2 → Return to Phase 2 (re-analyze gaps, generate next 4 questions)
+- Option 3 → Collect free-form text, merge with context, return to Phase 2
 ```
 
 ### Phase 4: Document Creation
@@ -494,6 +584,82 @@ Examples:
 
 **Gently note challenges without saying "no."**
 
+## Examples: Question Generation Based on Input Detail
+
+### Example 1: Detailed Input (New Plugin)
+
+```
+User: "I want a tape delay with wow and flutter modulation. Should have three knobs and a vintage aesthetic."
+
+Extracted:
+- Type: Effect ✓
+- Core concept: Tape delay with modulation ✓
+- Parameters: wow, flutter (2 mentioned, 3 total) ✓
+- UI: vintage, three knobs ✓ (capture but don't expand)
+
+Gaps identified (4 needed):
+- What should the third knob control? (Tier 2)
+- What ranges for wow/flutter? (Tier 2)
+- Specific tape reference? (Tier 3)
+- Primary use case? (Tier 3)
+
+Question Batch 1 (via AskUserQuestion):
+1. "What should the third knob control?" → [Mix, Feedback, Tone, Other]
+2. "What ranges for wow and flutter?" → [Subtle 0-5%, Moderate 0-15%, Extreme 0-50%, Other]
+3. "Any specific tape reference?" → [Echoplex 1950s-60s, Space Echo 1970s-80s, Modern, Other]
+4. "Primary use case?" → [Mixing depth, Creative effects, Both, Other]
+
+[Then decision gate with 3 options]
+```
+
+### Example 2: Vague Input (New Plugin)
+
+```
+User: "A distortion plugin"
+
+Extracted:
+- Type: Effect ✓
+- Core concept: Distortion (very generic)
+
+Gaps identified (4 needed):
+- What distortion character? (Tier 1)
+- What parameters? (Tier 2)
+- Primary use case? (Tier 3)
+- Any inspiration? (Tier 3)
+
+Question Batch 1 (via AskUserQuestion):
+1. "What distortion character?" → [Tube/tape warmth, Hard clipping, Bit crushing, Other]
+2. "What parameters?" → [Drive/tone/mix (3-knob), Drive/tone/mix/bias (4-knob), Extensive multiband, Other]
+3. "Primary use case?" → [Mixing saturation, Creative/aggressive, Both, Other]
+4. "Any inspiration?" → [Guitar pedals, Console/tape, Modern digital, Other]
+
+[Then decision gate]
+
+If user chooses "Ask me 4 more questions":
+- User answered: "Tube warmth", "Drive/tone/mix (3-knob)", "Both", "Console/tape"
+
+Updated context:
+- Type: Effect ✓
+- Core concept: Tube/tape warmth distortion ✓
+- Parameters: drive, tone, mix ✓
+- Use case: versatile ✓
+- Inspiration: console/tape ✓
+
+New gaps for Batch 2:
+- Drive range? (Tier 2)
+- Tone frequency range? (Tier 2)
+- Specific console reference? (Tier 3)
+- Harmonic character? (Tier 3)
+
+Question Batch 2:
+1. "Drive control range?" → [Subtle 0-6dB, Moderate 0-12dB, Extreme 0-24dB, Other]
+2. "Tone control?" → [High-pass filter, Low-pass filter, Tilt EQ, Other]
+3. "Specific console reference?" → [Neve 1073, SSL 4000, API 550, Other]
+4. "Harmonic character?" → [Even harmonics (warm), Odd harmonics (aggressive), Balanced, Other]
+
+[Then decision gate again]
+```
+
 ## Adaptive Questioning Strategy
 
 **Extract first, then fill gaps:**
@@ -501,9 +667,10 @@ Examples:
 1. User provides initial description
 2. Parse response for covered topics
 3. Generate questions only for missing topics
-4. Present questions one at a time
-5. After each answer, re-evaluate what's still missing
-6. Stop when sufficient information gathered
+4. Present 4 questions via AskUserQuestion
+5. After each batch, re-evaluate what's still missing
+6. Present decision gate
+7. Repeat until user finalizes
 
 **Don't ask redundant questions.**
 
