@@ -64,6 +64,12 @@
            LAYOUT
            ==================================================================== */
 
+        .controls-container {
+            display: flex;
+            gap: 60px;
+            align-items: center;
+        }
+
         .knob-container {
             display: flex;
             flex-direction: column;
@@ -85,7 +91,7 @@
             height: 200px;
         }
 
-        #gain-knob {
+        #gain-knob, #pan-knob {
             cursor: pointer;
         }
 
@@ -99,12 +105,22 @@
     </style>
 </head>
 <body>
-    <div class="knob-container">
-        <div class="knob-label">Gain</div>
-        <div class="knob-wrapper">
-            <canvas id="gain-knob" width="200" height="200"></canvas>
+    <div class="controls-container">
+        <div class="knob-container">
+            <div class="knob-label">Gain</div>
+            <div class="knob-wrapper">
+                <canvas id="gain-knob" width="200" height="200"></canvas>
+            </div>
+            <div class="knob-value" id="gain-value">0.0 dB</div>
         </div>
-        <div class="knob-value" id="gain-value">0.0 dB</div>
+
+        <div class="knob-container">
+            <div class="knob-label">Pan</div>
+            <div class="knob-wrapper">
+                <canvas id="pan-knob" width="200" height="200"></canvas>
+            </div>
+            <div class="knob-value" id="pan-value">C</div>
+        </div>
     </div>
 
     <script type="module">
@@ -266,7 +282,17 @@
                     this.paramState.getNormalisedValue() * (this.config.max - this.config.min);
 
                 let displayText;
-                if (actualValue <= -59.9) {
+
+                // Custom formatting for pan (center display)
+                if (this.config.unit === "%" && this.config.min === -100 && this.config.max === 100) {
+                    if (Math.abs(actualValue) < 0.5) {
+                        displayText = "C";
+                    } else if (actualValue < 0) {
+                        displayText = Math.abs(actualValue).toFixed(0) + "L";
+                    } else {
+                        displayText = actualValue.toFixed(0) + "R";
+                    }
+                } else if (actualValue <= -59.9 && this.config.unit === "dB") {
                     displayText = "−∞ dB";
                 } else {
                     displayText = actualValue.toFixed(this.config.decimals) + " " + this.config.unit;
@@ -289,10 +315,11 @@
 
         console.log("JUCE backend connected:", window.__JUCE__.backend);
 
-        // Get parameter state from C++
+        // Get parameter states from C++
         const gainState = Juce.getSliderState("GAIN");
+        const panState = Juce.getSliderState("PAN");
 
-        // Create knob
+        // Create gain knob
         const gainKnob = new RotaryKnob(
             document.getElementById("gain-knob"),
             gainState,
@@ -305,8 +332,22 @@
             }
         );
 
-        // Initialize display
+        // Create pan knob
+        const panKnob = new RotaryKnob(
+            document.getElementById("pan-knob"),
+            panState,
+            {
+                min: -100.0,
+                max: 100.0,
+                unit: "%",
+                decimals: 0,
+                valueDisplay: document.getElementById("pan-value")
+            }
+        );
+
+        // Initialize displays
         gainKnob.updateValueDisplay();
+        panKnob.updateValueDisplay();
 
         // ====================================================================
         // INITIALIZATION COMPLETE

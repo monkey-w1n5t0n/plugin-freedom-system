@@ -21,6 +21,7 @@ GainKnobAudioProcessorEditor::GainKnobAudioProcessorEditor(GainKnobAudioProcesso
     // STEP 1: CREATE RELAYS (before WebView!)
     // ------------------------------------------------------------------------
     gainRelay = std::make_unique<juce::WebSliderRelay>("GAIN");
+    panRelay = std::make_unique<juce::WebSliderRelay>("PAN");
 
     // ------------------------------------------------------------------------
     // STEP 2: CREATE WEBVIEW (with relay options)
@@ -38,8 +39,9 @@ GainKnobAudioProcessorEditor::GainKnobAudioProcessorEditor(GainKnobAudioProcesso
             // OPTIONAL: FL Studio fix (prevents blank screen on focus loss)
             .withKeepPageLoadedWhenBrowserIsHidden()
 
-            // REQUIRED: Register relay with WebView
+            // REQUIRED: Register relays with WebView
             .withOptionsFrom(*gainRelay)
+            .withOptionsFrom(*panRelay)
     );
 
     // ------------------------------------------------------------------------
@@ -48,6 +50,12 @@ GainKnobAudioProcessorEditor::GainKnobAudioProcessorEditor(GainKnobAudioProcesso
     gainAttachment = std::make_unique<juce::WebSliderParameterAttachment>(
         *processorRef.parameters.getParameter("GAIN"),
         *gainRelay,
+        nullptr  // No undo manager
+    );
+
+    panAttachment = std::make_unique<juce::WebSliderParameterAttachment>(
+        *processorRef.parameters.getParameter("PAN"),
+        *panRelay,
         nullptr  // No undo manager
     );
 
@@ -64,7 +72,7 @@ GainKnobAudioProcessorEditor::GainKnobAudioProcessorEditor(GainKnobAudioProcesso
     // ------------------------------------------------------------------------
     // WINDOW SIZE
     // ------------------------------------------------------------------------
-    setSize(400, 400);
+    setSize(600, 400);  // Wider to accommodate two knobs
     setResizable(false, false);
 }
 
@@ -75,9 +83,9 @@ GainKnobAudioProcessorEditor::GainKnobAudioProcessorEditor(GainKnobAudioProcesso
 GainKnobAudioProcessorEditor::~GainKnobAudioProcessorEditor()
 {
     // Members automatically destroyed in reverse order:
-    // 1. gainAttachment (stops calling evaluateJavascript)
-    // 2. webView (safe, attachment is gone)
-    // 3. gainRelay (safe, nothing using it)
+    // 1. panAttachment, gainAttachment (stop calling evaluateJavascript)
+    // 2. webView (safe, attachments are gone)
+    // 3. panRelay, gainRelay (safe, nothing using them)
 }
 
 //==============================================================================

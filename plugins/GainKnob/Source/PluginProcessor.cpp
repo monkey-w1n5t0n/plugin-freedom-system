@@ -14,6 +14,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout GainKnobAudioProcessor::crea
         "dB"
     ));
 
+    // PAN - Float parameter (-100.0 to 100.0, center at 0.0)
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID { "PAN", 1 },
+        "Pan",
+        juce::NormalisableRange<float>(-100.0f, 100.0f, 0.1f, 1.0f),
+        0.0f,
+        "%"
+    ));
+
     return layout;
 }
 
@@ -49,6 +58,10 @@ void GainKnobAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
     auto* gainParam = parameters.getRawParameterValue("GAIN");
     float gainDb = gainParam->load();
 
+    // Read PAN parameter (atomic read, real-time safe)
+    auto* panParam = parameters.getRawParameterValue("PAN");
+    float panPercent = panParam->load();
+
     // Convert dB to linear gain multiplier
     float gainLinear;
 
@@ -61,8 +74,23 @@ void GainKnobAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
         gainLinear = juce::Decibels::decibelsToGain(gainDb);
     }
 
-    // Apply gain to all channels uniformly
-    buffer.applyGain(gainLinear);
+    // Calculate pan coefficients using constant power panning
+    // Pan range: -100 (full left) to +100 (full right)
+    // At center (0), both channels are at 0.707 (-3dB) for equal power
+    float panNormalized = panPercent / 100.0f; // Convert to -1.0 to +1.0
+    float panRadians = (panNormalized * 0.25f + 0.25f) * juce::MathConstants<float>::pi;
+
+    float leftGain = std::cos(panRadians) * gainLinear;
+    float rightGain = std::sin(panRadians) * gainLinear;
+
+    // Apply gain and pan to stereo channels
+    int numChannels = buffer.getNumChannels();
+
+    if (numChannels >= 1)
+        buffer.applyGain(0, 0, buffer.getNumSamples(), leftGain);
+
+    if (numChannels >= 2)
+        buffer.applyGain(1, 0, buffer.getNumSamples(), rightGain);
 }
 
 juce::AudioProcessorEditor* GainKnobAudioProcessor::createEditor()
