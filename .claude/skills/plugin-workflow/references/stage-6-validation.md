@@ -11,21 +11,22 @@
 **Duration:** 10-20 minutes
 
 **Preconditions:**
+
 - Stages 0-5 complete
 - Plugin compiles successfully
-- Automated tests pass
+- Automated tests pass (if run)
 
-## Actions
+**Actions:**
 
-### 1. Create Factory Presets
+1. Create factory presets:
 
 ```bash
 mkdir -p plugins/[PluginName]/Presets/
 ```
 
-Create 3-5 preset files showcasing plugin capabilities in .preset or .xml format.
+Create 3-5 preset files showcasing plugin capabilities.
 
-**Preset format example:**
+**Preset format (.preset or .xml):**
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -36,7 +37,7 @@ Create 3-5 preset files showcasing plugin capabilities in .preset or .xml format
 </preset>
 ```
 
-### 2. Test Method Selection
+2. Invoke plugin-testing skill:
 
 Present test method choice:
 
@@ -51,11 +52,11 @@ How would you like to test [PluginName]?
 Choose (1-4): _
 ```
 
-**If tests fail:** STOP and wait for fixes.
+If tests fail, STOP and wait for fixes.
 
-### 3. Generate CHANGELOG.md
+3. Generate CHANGELOG.md:
 
-Create in Keep a Changelog format:
+**Format:**
 
 ```markdown
 # Changelog
@@ -69,8 +70,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - Initial release
-- [Feature descriptions]
-- [Parameter descriptions]
+- [Feature 1]
+- [Feature 2]
+- [Parameter 1]: [Description]
+- [Parameter 2]: [Description]
 
 ### Audio Processing
 
@@ -86,22 +89,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Tested in [DAW names]
 ```
 
-### 4. Invoke Validator Subagent
+4. Invoke validator subagent:
 
-Validate Stage 6 completion:
+Call validator to verify Stage 6 completion:
+
+```typescript
+const validation = Task({
+  subagent_type: "validator",
+  description: `Validate ${pluginName} Stage 6`,
+  prompt: `
+Validate Stage 6 completion for ${pluginName}.
+
+**Stage:** 6
+**Plugin:** ${pluginName}
+**Contracts:**
+- parameter-spec.md: [paste content or "not applicable"]
+- architecture.md: [paste content or "not applicable"]
+- plan.md: [paste content]
+
+**Expected outputs for Stage 6:**
 - CHANGELOG.md exists in Keep a Changelog format
 - Version 1.0.0 for initial release
 - Presets/ directory has 3+ preset files
-- pluginval passed or skipped with reason
+- pluginval passed (or skipped with reason)
 - PLUGINS.md updated to ✅ Working
 
-### 5. Update PLUGINS.md
+Return JSON validation report with status, checks, and recommendation.
+  `
+})
 
-```typescript
-updatePluginStatus(pluginName, "✅ Working")
+const report = JSON.parse(validation)
+
+if (report.status === "FAIL") {
+  // Present validation failure menu
+  presentValidationFailure(report)
+  // Options: Fix issues / Continue anyway / Pause
+  // Wait for user choice before proceeding
+}
 ```
 
-Add final fields:
+5. Update PLUGINS.md:
+
+Call `updatePluginStatus(pluginName, "✅ Working")`.
+
+Add final fields to entry:
 ```markdown
 **Version:** 1.0.0
 **Completed:** [YYYY-MM-DD]
@@ -109,17 +140,16 @@ Add final fields:
 **Validation:**
 - ✓ Factory presets: [N] presets created
 - ✓ CHANGELOG.md: Generated in Keep a Changelog format
-- ✓ Pluginval: [Passed | Skipped]
+- ✓ Pluginval: [Passed | Skipped (no build)]
 
-**Formats:** VST3, AU
+**Formats:** VST3, AU (if built)
 ```
 
-Add timeline entry:
-```markdown
-- **[YYYY-MM-DD] (Stage 6):** Validation complete
-```
+Add timeline entry: `updatePluginTimeline(pluginName, 6, "Validation complete")`.
 
-### 6. Delete .continue-here.md
+6. Delete .continue-here.md:
+
+Call `deleteHandoff(pluginName)`:
 
 ```bash
 rm plugins/[PluginName]/.continue-here.md
@@ -127,30 +157,18 @@ rm plugins/[PluginName]/.continue-here.md
 
 Workflow is complete, no need for handoff file.
 
-### 7. Git Commit
+**Git commit:**
 
-```bash
-git add plugins/[PluginName]/Presets/
-git add plugins/[PluginName]/CHANGELOG.md
-git add PLUGINS.md
+Call `commitStage(pluginName, 6, "validation complete")`.
 
-git commit -m "$(cat <<'EOF'
-feat: [PluginName] Stage 6 - validation complete
+This commits:
+- `plugins/[PluginName]/Presets/`
+- `plugins/[PluginName]/CHANGELOG.md`
+- `PLUGINS.md`
 
-Factory presets: [N] presets created
-CHANGELOG.md: Keep a Changelog format
-Pluginval: [Passed | Skipped]
+Note: `.continue-here.md` is deleted and NOT committed (workflow complete).
 
-🤖 Generated with Claude Code
-
-Co-Authored-By: Claude <noreply@anthropic.com>
-EOF
-)"
-```
-
-**Note:** `.continue-here.md` is deleted and NOT committed (workflow complete).
-
-## Decision Menu
+**Decision menu:**
 
 ```
 ✓ Stage 6 complete: [PluginName] is ready!
@@ -168,12 +186,12 @@ Choose (1-6): _
 
 **Handle responses:**
 
-- **Option 1:** Invoke `plugin-lifecycle` skill (installation to system folders)
-- **Option 2:** Provide instructions for manual DAW testing from build folder
-- **Option 3:** Exit, suggest `/dream` or `/implement`
-- **Option 4:** Suggest creating README or user manual documentation
-- **Option 5:** Provide instructions for exporting build artifacts
-- **Option 6:** Ask what they'd like to do
+- Option 1 → Invoke `plugin-lifecycle` skill (Phase 1b Task 9)
+- Option 2 → Provide instructions for manual DAW testing
+- Option 3 → Exit, suggest `/dream` or `/implement`
+- Option 4 → Suggest creating README or documentation
+- Option 5 → Provide instructions for exporting builds
+- Option 6 → Ask what they'd like to do
 
 ---
 
