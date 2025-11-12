@@ -1,6 +1,7 @@
 #!/bin/bash
 # PostToolUse hook - Real-time code quality validation for JUCE best practices
 # Layer 1 validation: Fast pattern matching (<2s), blocks on real-time safety violations
+# Layer 2 validation: Silent failure detection (runs after file modifications)
 
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
@@ -11,7 +12,20 @@ if [[ ! "$TOOL_NAME" =~ ^(Write|Edit)$ ]]; then
 fi
 
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null)
-if [[ ! "$FILE_PATH" =~ plugins/.*/Source/.*\.(cpp|h)$ ]]; then
+
+# Determine validation level based on file type
+PLUGIN_SOURCE=false
+PLUGIN_FILE=false
+
+if [[ "$FILE_PATH" =~ plugins/.*/Source/.*\.(cpp|h)$ ]]; then
+  PLUGIN_SOURCE=true
+  PLUGIN_FILE=true
+elif [[ "$FILE_PATH" =~ plugins/.*/(CMakeLists\.txt|ui/.*\.(html|js))$ ]]; then
+  PLUGIN_FILE=true
+fi
+
+# Skip if not a plugin file
+if [ "$PLUGIN_FILE" = false ]; then
   exit 0
 fi
 
@@ -26,13 +40,12 @@ if [ -z "$FILE_CONTENT" ]; then
   exit 0
 fi
 
-# Extract processBlock function for real-time safety checks
-PROCESS_BLOCK=$(echo "$FILE_CONTENT" | awk '/void.*processBlock.*AudioBuffer/{flag=1} flag{print} /^}$/{if(flag) exit}')
+# Layer 1: Real-time safety checks (processBlock only, for C++ source files)
+if [ "$PLUGIN_SOURCE" = true ]; then
+  # Extract processBlock function for real-time safety checks
+  PROCESS_BLOCK=$(echo "$FILE_CONTENT" | awk '/void.*processBlock.*AudioBuffer/{flag=1} flag{print} /^}$/{if(flag) exit}')
 
-if [ -z "$PROCESS_BLOCK" ]; then
-  # No processBlock found, skip validation
-  exit 0
-fi
+  if [ -n "$PROCESS_BLOCK" ]; then
 
 # Real-time safety violation checks
 ERRORS=""
@@ -65,20 +78,41 @@ if ! echo "$PROCESS_BLOCK" | grep -q 'ScopedNoDenormals'; then
   WARNINGS="${WARNINGS}\nWARNING: Missing ScopedNoDenormals in processBlock"
 fi
 
-# Report results
-if [ -n "$ERRORS" ]; then
-  echo "Real-time safety violations detected in $FILE_PATH:" >&2
-  echo -e "$ERRORS" >&2
-  echo "" >&2
-  echo "These violations can cause audio dropouts, glitches, or crashes." >&2
-  echo "processBlock must be real-time safe (no allocations, locks, or I/O)." >&2
-  exit 1  # Block workflow on ERROR
+    # Report results
+    if [ -n "$ERRORS" ]; then
+      echo "Real-time safety violations detected in $FILE_PATH:" >&2
+      echo -e "$ERRORS" >&2
+      echo "" >&2
+      echo "These violations can cause audio dropouts, glitches, or crashes." >&2
+      echo "processBlock must be real-time safe (no allocations, locks, or I/O)." >&2
+      exit 1  # Block workflow on ERROR
+    fi
+
+    if [ -n "$WARNINGS" ]; then
+      echo "Code quality recommendations for $FILE_PATH:" >&2
+      echo -e "$WARNINGS" >&2
+      # Don't block on warnings, just inform
+    fi
+  fi
 fi
 
-if [ -n "$WARNINGS" ]; then
-  echo "Code quality recommendations for $FILE_PATH:" >&2
-  echo -e "$WARNINGS" >&2
-  # Don't block on warnings, just inform
+# Layer 2: Silent failure pattern detection (all plugin files)
+# Run comprehensive scan on Write/Edit to catch known silent failures
+echo "Running silent failure pattern detection..." >&2
+python3 .claude/hooks/validators/validate-silent-failures.py
+RESULT=$?
+
+if [ $RESULT -eq 1 ]; then
+  # Critical patterns detected - workflow blocked
+  echo "" >&2
+  echo "❌ PostToolUse validation FAILED: Silent failure patterns detected" >&2
+  echo "Fix these issues before proceeding (they compile but fail at runtime)" >&2
+  exit 1
+elif [ $RESULT -eq 2 ]; then
+  # Warnings detected - inform but don't block
+  echo "" >&2
+  echo "⚠️  PostToolUse validation: Warnings detected (see above)" >&2
+  echo "Consider addressing these issues for better code quality" >&2
 fi
 
 exit 0

@@ -25,6 +25,33 @@
 3. **Discovery through play** - Features found via slash command autocomplete and decision menus
 4. **Instructed routing** - Commands expand to prompts, Claude invokes skills
 5. **Required Reading injection** - Critical patterns (`juce8-critical-patterns.md`) are mandatory reading for all subagents to prevent repeat mistakes
+6. **Proactive validation** - Errors caught early (dependencies at start, design-sync before Stage 2, silent failures at compile-time)
+
+## Proactive Validation (Error Prevention)
+
+The system prevents late-stage failures through multi-layer validation:
+
+**Session Start (SessionStart hook):**
+- Validates all dependencies before any work (Python, jq, CMake, Xcode, JUCE, git)
+- Reports critical errors with actionable fix commands
+- Prevents 10+ minutes of work before discovering missing dependencies
+
+**Stage 1→2 Transition (design-sync gate):**
+- MANDATORY validation of mockup ↔ creative brief alignment
+- Catches design drift before Stage 2 generates boilerplate
+- Blocks implementation if contracts misaligned (missing features, scope creep, style mismatch)
+
+**During Implementation (PostToolUse hook):**
+- Real-time safety checks (processBlock validation)
+- Silent failure pattern detection (12+ known patterns from juce8-critical-patterns.md)
+- Blocks commits with patterns that compile but fail at runtime
+
+**Checkpoint Completion (plugin-workflow):**
+- Verifies all checkpoint steps succeeded before presenting decision menu
+- Detects incomplete state updates (missing handoff, status, timeline, commit)
+- Prevents state corruption from partial checkpoint failures
+
+**Result:** 90% reduction in late-stage failures per SYSTEM-AUDIT-REPORT.md
 
 ## Checkpoint Protocol (System-Wide)
 
@@ -32,7 +59,8 @@ At every significant completion point (stage complete, phase complete, files gen
 
 1. Auto-commit changes (if in workflow)
 2. Update state files (.continue-here.md, PLUGINS.md)
-3. ALWAYS present numbered decision menu:
+3. **Verify checkpoint completion** (all steps succeeded)
+4. ALWAYS present numbered decision menu:
 
 ✓ [Completion statement]
 

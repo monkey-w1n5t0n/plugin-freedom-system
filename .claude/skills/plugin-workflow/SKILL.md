@@ -254,17 +254,86 @@ See `references/state-management.md` for `checkStagePreconditions()` function.
 
   1. Verify state integrity (verifyStateIntegrity) → BLOCK if corrupted
   2. Check preconditions → If failed, BLOCK with reason
-  3. Route to subagent based on stage number:
+  3. **MANDATORY: design-sync validation before Stage 2** → BLOCK if drift detected
+  4. Route to subagent based on stage number:
      - Stage 2 → foundation-agent
      - Stage 3 → shell-agent
      - Stage 4 → dsp-agent
      - Stage 5 → gui-agent
      - Stage 6 → validator (or direct execution)
-  4. Pass contracts and Required Reading to subagent
-  5. Wait for subagent completion
+  5. Pass contracts and Required Reading to subagent
+  6. Wait for subagent completion
 
   See [references/dispatcher-pattern.md](references/dispatcher-pattern.md) for full pseudocode.
 </dispatcher_pattern>
+
+<design_sync_gate enforcement_level="MANDATORY">
+  **Purpose:** Prevent design drift before implementation begins.
+
+  **When:** BEFORE dispatching Stage 2 (foundation-agent), IF mockup exists.
+
+  **Conditions:**
+  - IF plugins/[PluginName]/.ideas/mockups/ directory exists
+  - AND parameter-spec.md exists (mockup finalized)
+  - THEN design-sync validation is REQUIRED
+
+  **Implementation:**
+  ```
+  Before dispatching Stage 2:
+
+  1. Check if mockup exists:
+     - Look for plugins/[PluginName]/.ideas/parameter-spec.md
+     - Look for mockups/ directory with YAML files
+
+  2. If mockup exists:
+     - Run design-sync validation automatically
+     - Present findings with decision menu
+     - BLOCK Stage 2 until one of:
+       a) No drift detected (continue)
+       b) Acceptable evolution (user confirms)
+       c) Drift resolved (user updates brief or mockup)
+       d) User explicitly overrides (logged)
+
+  3. If no mockup:
+     - Skip design-sync (no visual design to validate)
+     - Proceed to Stage 2 directly
+  ```
+
+  **Decision menu when drift detected:**
+  ```
+  ⚠️ Design-brief drift detected
+
+  [Findings from design-sync]
+
+  Cannot proceed to Stage 2 until resolved:
+
+  1. Update brief - Document evolution and continue
+  2. Update mockup - Fix mockup to match brief
+  3. Override (not recommended) - Accept drift and proceed anyway
+  4. Cancel - Stop workflow, fix manually
+  5. Other
+
+  Choose (1-5): _
+  ```
+
+  **Why mandatory:**
+  - Catches misalignments before Stage 2 generates boilerplate
+  - Prevents implementing features not in brief
+  - Prevents missing features mentioned in brief
+  - Avoids 10+ minutes of wasted work on wrong implementation
+  - Ensures contracts remain single source of truth
+
+  **Override logging:**
+  If user chooses override, log to .validator-overrides.yaml:
+  ```yaml
+  - timestamp: [ISO-8601]
+    validator: design-sync
+    stage: pre-stage-2
+    severity: [none|attention|critical]
+    override-reason: "User proceeded despite drift"
+    findings: "[brief summary]"
+  ```
+</design_sync_gate>
 
 4. **Checkpoint enforcement after EVERY subagent:**
 
@@ -286,28 +355,84 @@ See `references/state-management.md` for `checkStagePreconditions()` function.
         <step order="1" required="true" function="commitStage">
           commitStage(pluginName, currentStage, result.description)
           Auto-commit all changes from subagent completion
+          VERIFY: git commit succeeded (check exit code)
         </step>
 
         <step order="2" required="true" function="updateHandoff">
           updateHandoff(pluginName, currentStage + 1, result.completed, result.nextSteps)
           Update .continue-here.md with new stage, timestamp, next_action
+          VERIFY: File exists and contains expected stage number
         </step>
 
         <step order="3" required="true" function="updatePluginStatus">
           updatePluginStatus(pluginName, `🚧 Stage ${currentStage}`)
           Update PLUGINS.md status emoji
+          VERIFY: PLUGINS.md contains new status
         </step>
 
         <step order="4" required="true" function="updatePluginTimeline">
           updatePluginTimeline(pluginName, currentStage, result.description)
           Append timeline entry to PLUGINS.md
+          VERIFY: Timeline entry exists in PLUGINS.md
         </step>
 
-        <step order="5" required="true" blocking="true" function="presentDecisionMenu">
+        <step order="5" required="true" function="verifyCheckpoint">
+          verifyCheckpoint(pluginName, currentStage)
+          Validate all checkpoint steps completed successfully
+          BLOCK: If any step failed, present retry menu before continuing
+        </step>
+
+        <step order="6" required="true" blocking="true" function="presentDecisionMenu">
           presentDecisionMenu({ stage, completionStatement, pluginName })
           Present numbered decision menu and WAIT for user response
         </step>
       </checkpoint_enforcement>
+
+      <checkpoint_verification>
+        **Purpose:** Verify all checkpoint steps completed before presenting decision menu.
+
+        **Implementation:**
+        ```
+        After steps 1-4 complete, run verification:
+
+        CHECKPOINT VERIFICATION:
+        ✓ Step 1: Git commit [commit-hash]
+        ✓ Step 2: Handoff updated (.continue-here.md stage: N+1)
+        ✓ Step 3: Plugin status updated (PLUGINS.md: 🚧 Stage N)
+        ✓ Step 4: Timeline appended (PLUGINS.md: [date] Stage N complete)
+
+        IF all verified:
+          Proceed to decision menu
+
+        IF any failed:
+          Display failure report:
+          ━━━ Checkpoint Incomplete ━━━
+          ✗ Step 2: Handoff update failed (file not found)
+          ✓ Step 1: Commit succeeded
+          ✓ Step 3: Status updated
+          ✓ Step 4: Timeline appended
+
+          Cannot proceed - checkpoint integrity required.
+
+          1. Retry failed steps - Attempt automatic fix
+          2. Show details - See error messages
+          3. Manual fix - I'll fix it myself (pause workflow)
+          4. Other
+        ```
+
+        **Verification checks:**
+        - Step 1: `git log -1 --oneline` contains stage reference
+        - Step 2: `.continue-here.md` exists and contains `stage: N+1`
+        - Step 3: `PLUGINS.md` contains `**Status:** 🚧 Stage N`
+        - Step 4: `PLUGINS.md` timeline has entry dated today for Stage N
+
+        **Why critical:**
+        Incomplete checkpoints cause state corruption:
+        - Missing handoff → /continue can't resume
+        - Missing status → PLUGINS.md out of sync
+        - Missing timeline → no audit trail
+        - Missing commit → changes lost on crash
+      </checkpoint_verification>
     </checkpoint_phase>
 
     <decision_gate blocking="true">

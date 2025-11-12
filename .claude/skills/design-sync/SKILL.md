@@ -31,7 +31,7 @@ This skill compares the finalized UI mockup against the original creative brief 
 
 1. **Auto-invoked by ui-mockup** after Phase 4.5 finalization (before C++ generation)
 2. **Manual:** `/sync-design [PluginName]`
-3. **Stage 1 Planning:** Optional pre-check before implementation starts
+3. **MANDATORY: plugin-workflow Stage 1→2 transition** (before foundation-agent dispatch)
 
 **Entry parameters:**
 
@@ -424,37 +424,44 @@ If user chooses "Check alignment" → invoke design-sync skill
 
 ---
 
-## Integration with plugin-workflow Stage 1
+## Integration with plugin-workflow Stage 1→2 Transition
 
-**Optional pre-check before planning:**
+**MANDATORY gate before Stage 2 begins:**
 
-Stage 1 Planning detects finalized mockup:
+plugin-workflow MUST run design-sync before dispatching foundation-agent (Stage 2), IF mockup exists:
 
 ```markdown
-Starting Stage 1: Planning
+━━━ Stage 1 Complete - Planning Finished ━━━
 
-Contracts loaded:
-
+Contracts validated:
 - creative-brief.md: EXISTS
 - parameter-spec.md: EXISTS (from mockup v3)
+- architecture.md: EXISTS
+- plan.md: EXISTS
 
-Mockup finalized: Yes (v3)
-design-sync validation: Not yet run
+Mockup detected: v3 (finalized)
+design-sync validation: REQUIRED before Stage 2
 
-Recommendation: Validate brief ↔ mockup alignment before planning
-
-What's next?
-
-1. Run design-sync - Validate alignment (recommended)
-2. Skip validation - Proceed with planning (trust mockup)
-3. Other
+Running mandatory design-sync validation...
 ```
 
-If user chooses "Run design-sync" → invoke this skill
+**Validation flow:**
 
-**Why pre-check matters:**
+1. Check for parameter-spec.md existence
+2. If exists → RUN design-sync automatically (not optional)
+3. Present findings with decision menu
+4. BLOCK Stage 2 dispatch until resolved:
+   - No drift → Continue to Stage 2
+   - Acceptable evolution → User confirms → Continue
+   - Drift detected → User fixes → Continue
+   - Critical drift → MUST resolve before proceeding
 
-Stage 1 generates plan.md based on parameter-spec.md. If parameter-spec doesn't match brief vision, plan will be misaligned. Better to catch drift before planning.
+**If no mockup:**
+Skip design-sync, proceed directly to Stage 2
+
+**Why mandatory:**
+
+Stage 2 generates CMakeLists.txt, boilerplate, and build system. If contracts are misaligned, all downstream stages implement the wrong specification. Catching drift at Stage 1→2 boundary prevents 10+ minutes of wasted implementation work.
 
 ---
 

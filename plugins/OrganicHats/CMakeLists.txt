@@ -65,15 +65,15 @@ target_compile_definitions(OrganicHats
         JUCE_USE_CURL=0
 )
 
-# WebView UI Resources (will be uncommented by gui-agent when UI is ready)
-# juce_add_binary_data(OrganicHats_UIResources
-#     SOURCES
-#         Source/ui/public/index.html
-#         Source/ui/public/js/juce/index.js
-#         Source/ui/public/js/juce/check_native_interop.js
-# )
-#
-# target_link_libraries(OrganicHats
-#     PRIVATE
-#         OrganicHats_UIResources
-# )
+# WebView UI Resources (Pattern #13: check_native_interop.js is REQUIRED)
+juce_add_binary_data(OrganicHats_UIResources
+    SOURCES
+        Source/ui/public/index.html
+        Source/ui/public/js/juce/index.js
+        Source/ui/public/js/juce/check_native_interop.js
+)
+
+target_link_libraries(OrganicHats
+    PRIVATE
+        OrganicHats_UIResources
+)
