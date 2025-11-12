@@ -30,7 +30,7 @@
 | DriveVerb | 📦 Installed | 1.0.2 | 2025-11-12 |
 | FlutterVerb | 📦 Installed | 1.0.3 | 2025-11-12 |
 | LushVerb | 🚧 Stage 1 | - | 2025-11-11 |
-| OrganicHats | 💡 Ideated | - | 2025-11-12 |
+| OrganicHats | 🚧 Stage 0 | - | 2025-11-12 |
 
 ### GainKnob
 
@@ -430,7 +430,7 @@ Stunning, lush algorithmic reverb inspired by Strymon BigSky. Four simple contro
 
 ### OrganicHats
 
-**Status:** 💡 **Ideated**
+**Status:** 🚧 **Stage 0**
 **Created:** 2025-11-12
 **Type:** Synth (Instrument)
 
@@ -473,6 +473,7 @@ Global:
 
 **Lifecycle Timeline:**
 - **2025-11-12:** Creative brief completed
+- **2025-11-12 (Stage 0):** Research completed - DSP architecture documented
 
 **Known Issues:**
 - None
