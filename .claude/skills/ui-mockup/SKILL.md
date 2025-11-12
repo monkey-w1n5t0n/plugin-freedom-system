@@ -14,22 +14,34 @@ preconditions:
 
 ## Workflow Overview
 
-**TWO-PHASE WORKFLOW:**
+<critical_sequence phases="A,B" enforcement="gate">
+<phase id="A" name="Design Iteration">
+**Purpose:** Generate 2 design files for rapid iteration.
 
-### Phase A: Design Iteration (Fast)
-Generate 2 design files for rapid iteration:
+**Outputs:**
 1. **v[N]-ui.yaml** - Machine-readable design specification
 2. **v[N]-ui-test.html** - Browser-testable mockup (no JUCE required)
 
-**STOP HERE** - Present decision menu for user to iterate or finalize.
+<decision_gate id="design_approval" required="true">
+**STOP:** Do NOT proceed to Phase B until user approves design via Phase 5.5 decision menu.
 
-### Phase B: Implementation Scaffolding (After Finalization)
-Generate 5 implementation files only after user approves design:
+**Gate criteria:**
+- User selected option 3 or 5 from Phase 5.5 menu ("Finalize...")
+- Design validated against WebView constraints
+</decision_gate>
+</phase>
+
+<phase id="B" name="Implementation Scaffolding" requires_gate="design_approval">
+**Purpose:** Generate 5 implementation files ONLY after Phase A approval.
+
+**Outputs:**
 3. **v[N]-ui.html** - Production HTML (copy-paste to plugin)
 4. **v[N]-PluginEditor.h** - C++ header boilerplate
 5. **v[N]-PluginEditor.cpp** - C++ implementation boilerplate
 6. **v[N]-CMakeLists.txt** - WebView build configuration
 7. **v[N]-integration-checklist.md** - Implementation steps
+</phase>
+</critical_sequence>
 
 **Why two phases?** HTML mockups are cheap to iterate. C++ boilerplate is pointless if design isn't locked. This saves time by avoiding premature scaffolding generation.
 
@@ -104,11 +116,18 @@ Choose (1-3): _
 
 ## Phase 1: Load Context from Creative Brief
 
-**CRITICAL: Always read creative-brief.md before starting.**
+**CRITICAL: Read creative-brief.md if it exists:**
 
 ```bash
-test -f "plugins/$PLUGIN_NAME/.ideas/creative-brief.md"
+if [ -f "plugins/$PLUGIN_NAME/.ideas/creative-brief.md" ]; then
+    # Extract context (see references/context-extraction.md)
+    # Continue to Phase 1.5 with design-informed prompt
+else
+    # Skip to Phase 1.5 with generic prompt (standalone mode)
+fi
 ```
+
+**Note:** preconditions="None" means skill can work standalone without creative-brief.md, but MUST read it when present.
 
 **Extract UI context from creative-brief.md:**
 
@@ -117,7 +136,7 @@ test -f "plugins/$PLUGIN_NAME/.ideas/creative-brief.md"
 - **Plugin type:** Effect/synth/utility (affects typical layouts)
 - **Vision section:** Any visual references or inspirations
 
-**See:** `references/context-extraction.md` for detailed extraction guidelines
+**Context extraction:** See `references/context-extraction.md#example-extracting-from-creative-brief` for detailed examples and guidelines
 
 ## Phase 1.5: Context-Aware Initial Prompt
 
@@ -197,6 +216,8 @@ Gaps identified:
 - Always include "Other" option for custom input
 - Users can skip questions via "Other" option and typing "skip"
 
+**Note:** Internal question routing uses AskUserQuestion tool, but final decision menus (Phase 5.5, Phase 10.7) MUST use inline numbered format per checkpoint protocol.
+
 **Example question batch (via AskUserQuestion):**
 
 ```
@@ -242,58 +263,21 @@ Question 4:
 2. Re-analyze gaps
 3. Proceed to decision gate
 
-### Example: Context-Aware UI Questions
+**Question batch generation:**
 
-```
-Creative brief UI Concept:
-"Vintage aesthetic with three knobs"
+Generate 4 questions using AskUserQuestion based on identified gaps.
 
-Phase 1.5 user response:
-"I want the knobs arranged horizontally, with a tape reel animation in the background"
+**Question structure pattern:**
+- question: Clear, specific question about the gap
+- header: Short category label (max 12 chars)
+- options: 2-4 distinct choices + "Other" (automatically added)
 
-Extracted:
-- Layout: horizontal arrangement ✓
-- Control type: knobs ✓
-- Visual style: vintage ✓
-- Special element: tape reel animation ✓
+**See:** `references/design-questions.md#example-question-batches` for question templates and tiering examples.
 
-Gaps identified (4 needed):
-- Layout structure specifics? (Tier 1)
-- Vintage style details? (Tier 2)
-- Knob style? (Tier 2)
-- VU meters or other feedback? (Tier 2)
-
-Question Batch 1 (via AskUserQuestion):
-1. "Layout structure for the three knobs?" → [Horizontal row, Vertical stack, Triangle arrangement, Other]
-2. "Vintage style details?" → [Brushed metal, Wood panel, Reel-to-reel theme, Other]
-3. "Visual feedback elements?" → [VU meters, Tape reel animation, Both, None]
-4. "Knob style?" → [Large vintage knobs, Small precise knobs, Chicken-head style, Other]
-
-[Then decision gate]
-
-If user chooses "Ask me 4 more questions":
-- User answered: "Horizontal row", "Reel-to-reel theme", "Both VU and reels", "Large vintage knobs"
-
-Updated context:
-- Layout: horizontal row of knobs ✓
-- Visual style: reel-to-reel theme ✓
-- Controls: large vintage knobs ✓
-- Visual feedback: VU meters + tape reel animation ✓
-
-New gaps for Batch 2:
-- Window size? (Tier 1)
-- Color scheme? (Tier 3)
-- Reel animation behavior? (Tier 3)
-- VU meter style? (Tier 3)
-
-Question Batch 2:
-1. "Window size?" → [Compact 500x300, Standard 600x400, Large 800x500, Other]
-2. "Color scheme?" → [Warm sepia/brown, Cool metal/gray, Classic black/orange, Other]
-3. "Reel animation?" → [Speed matches tempo, Speed matches delay time, Always spinning, Other]
-4. "VU meter style?" → [Needle style, LED bars, Classic backlit, Other]
-
-[Then decision gate again]
-```
+**Tier priority:**
+1. Critical gaps (layout, control types) - ask first
+2. Visual gaps (style, key elements) - ask second
+3. Polish gaps (colors, animations) - ask if needed
 
 ## Phase 3.5: Decision Gate
 
@@ -320,41 +304,12 @@ Route based on answer:
 
 **Purpose:** Machine-readable design spec that guides HTML generation and C++ implementation.
 
-**Structure:**
+**YAML structure:** See `assets/ui-yaml-template.yaml` for complete template with all control types.
 
-```yaml
-window:
-  width: 600
-  height: 400
-  resizable: false
-
-colors:
-  background: "#2b2b2b"
-  primary: "#4a9eff"
-  text: "#ffffff"
-
-layout:
-  type: grid  # or: vertical-sections, horizontal-sections, custom
-  sections:
-    - id: header
-      height: 60
-      controls: [title]
-    - id: main
-      flex: 1
-      controls: [threshold, ratio, attack, release, gain]
-
-controls:
-  - id: threshold
-    type: rotary-knob
-    label: "Threshold"
-    parameter: "threshold"
-    range: [-60.0, 0.0]
-    unit: "dB"
-    default: -20.0
-    position: {x: 50, y: 100}
-```
-
-**See:** `assets/ui-yaml-template.yaml` for complete template structure
+**Required sections:**
+- window: Dimensions, resizability
+- controls: Array of control definitions (id, type, position, range)
+- styling: Colors, fonts, theme tokens
 
 ## Phase 5: Generate Browser Test HTML
 
@@ -375,27 +330,56 @@ controls:
 
 ## Phase 5.3: Validate WebView Constraints (Before Decision Menu)
 
-**CRITICAL:** Validate generated HTML against WebView constraints before presenting to user.
-
-**Validation checklist:**
+<requirement type="validation" blocking="true">
+<validation_checklist>
+**Execute validation before Phase 5.5:**
 
 ```bash
-# Check for forbidden CSS viewport units
-! grep -q "100vh\|100vw\|100dvh\|100svh" v[N]-ui-test.html
+# Store validation results
+VALIDATION_PASSED=true
 
-# Check for required html/body height
-grep -q "html, body.*height: 100%" v[N]-ui-test.html
+# Check 1: No viewport units
+if grep -q "100vh\|100vw\|100dvh\|100svh" v[N]-ui-test.html; then
+    echo "❌ FAIL: Forbidden viewport units found"
+    VALIDATION_PASSED=false
+fi
 
-# Check for native feel CSS
-grep -q "user-select: none" v[N]-ui-test.html
+# Check 2: Required html/body height
+if ! grep -q "html, body.*height: 100%" v[N]-ui-test.html; then
+    echo "❌ FAIL: Missing required html/body height: 100%"
+    VALIDATION_PASSED=false
+fi
 
-# Check for context menu disabled
-grep -q 'contextmenu.*preventDefault' v[N]-ui-test.html
+# Check 3: Native feel CSS
+if ! grep -q "user-select: none" v[N]-ui-test.html; then
+    echo "❌ FAIL: Missing user-select: none"
+    VALIDATION_PASSED=false
+fi
+
+# Check 4: Context menu disabled
+if ! grep -q 'contextmenu.*preventDefault' v[N]-ui-test.html; then
+    echo "❌ FAIL: Context menu not disabled"
+    VALIDATION_PASSED=false
+fi
+
+# Gate decision
+if [ "$VALIDATION_PASSED" = false ]; then
+    echo "Regenerating mockup with corrections..."
+    # Return to Phase 4 with fixes
+else
+    echo "✅ All WebView constraints validated"
+    # Proceed to Phase 5.5
+fi
 ```
 
-**If validation fails:**
-- ❌ REJECT: Regenerate mockup with corrections
-- Do NOT present to user until constraints are satisfied
+**Failure handling:**
+IF any check fails THEN:
+  1. Log specific violation
+  2. Regenerate mockup with corrections
+  3. Re-run validation
+  4. Do NOT proceed to Phase 5.5 until ALL checks pass
+</validation_checklist>
+</requirement>
 
 **See:** `references/ui-design-rules.md` for complete validation rules
 
@@ -454,11 +438,13 @@ mockup_finalized: false
 
 ---
 
-## ⚠️ CRITICAL STOP POINT - Phase 5.5: Design Decision Menu
+<decision_gate id="phase_5_5_approval" blocking="true">
+## Phase 5.5: Design Decision Menu
 
-**DO NOT PROCEED TO PHASE 6 WITHOUT USER CONFIRMATION**
+**Gate enforcement:** Phases 6-10 are CONDITIONALLY EXECUTED based on user choice.
 
-After generating YAML + test HTML, present this decision menu:
+<menu_presentation>
+Present this decision menu:
 
 ```
 ✓ Mockup v[N] design created (2 files)
@@ -479,8 +465,16 @@ What do you think?
 
 Choose (1-8): _
 ```
+</menu_presentation>
 
-**WAIT for user response before continuing.**
+<conditional_execution requires="user_choice">
+**Execution routing:**
+- IF user chose option 3 or 5 (finalize) THEN proceed to Phase 6
+- IF user chose option 2 (refine) THEN return to Phase 2 with v[N+1]
+- IF user chose option 1 (check alignment) THEN invoke design-sync skill
+- ELSE handle custom options
+
+**DO NOT proceed to Phase 6 unless user explicitly chose finalization option.**
 
 **Option handling:**
 - **Option 1**: Check alignment → Invoke design-sync skill to validate mockup ↔ creative brief consistency
@@ -505,10 +499,13 @@ Choose (1-8): _
 - **Option 6**: Offer to open test HTML in browser for interactive review
 - **Option 7**: Validate WebView constraints (run Phase 5.3 checks again)
 - **Option 8**: Other
-
-**Only execute Phases 6-10 if user chose option 3 or 5 (finalize).**
+</conditional_execution>
+</decision_gate>
 
 ---
+
+<conditional_execution requires_gate="phase_5_5_approval">
+<critical_sequence phases="6,7,8,9,10" enforcement="sequential">
 
 ## Phase 6: Generate Production HTML (After Finalization Only)
 
@@ -578,121 +575,27 @@ for (const match of comboMatches) {
 
 **Purpose:** WebView integration boilerplate for Stage 5 (GUI).
 
-### File 1: v[N]-PluginEditor.h (C++ Header)
+**Generation strategy:** Use template replacement from `references/cpp-boilerplate-generation.md`.
 
-**Base template:** `assets/webview-templates/PluginEditor-webview.h`
+**Required inputs:**
+- Plugin name (PascalCase and UPPERCASE)
+- Current version number [N]
+- Window dimensions from YAML
+- Parameter IDs from Phase 6 extraction
 
-**Key replacements:**
+**Key templates:**
+- Header: `assets/webview-templates/PluginEditor-webview.h`
+- Implementation: `assets/webview-templates/PluginEditor-webview.cpp`
 
-**{{RELAY_DECLARATIONS}}** → Generate relay declarations for each parameter:
+**Critical patterns:**
+- Generate relay declarations for each parameter (slider/toggle/combo)
+- Generate matching attachment declarations
+- **⚠️ CRITICAL:** Enforce member order (relays → webView → attachments) to prevent release build crashes
+- Generate relay creation, WebView options, and attachment creation code
+- Generate resource provider mappings for all UI files
+- Extract window size from YAML
 
-```cpp
-// For each parameter from Phase 6 extraction:
-// - Slider/Knob → std::unique_ptr<juce::WebSliderRelay> [name]Relay;
-// - Toggle      → std::unique_ptr<juce::WebToggleButtonRelay> [name]Relay;
-// - Dropdown    → std::unique_ptr<juce::WebComboBoxRelay> [name]Relay;
-
-// Example:
-std::unique_ptr<juce::WebSliderRelay> gainRelay;
-std::unique_ptr<juce::WebSliderRelay> toneRelay;
-std::unique_ptr<juce::WebToggleButtonRelay> bypassRelay;
-std::unique_ptr<juce::WebComboBoxRelay> modeRelay;
-```
-
-**{{ATTACHMENT_DECLARATIONS}}** → Generate attachment declarations matching relay types:
-
-```cpp
-// Match relay type for each parameter:
-std::unique_ptr<juce::WebSliderParameterAttachment> gainAttachment;
-std::unique_ptr<juce::WebSliderParameterAttachment> toneAttachment;
-std::unique_ptr<juce::WebToggleButtonParameterAttachment> bypassAttachment;
-std::unique_ptr<juce::WebComboBoxParameterAttachment> modeAttachment;
-```
-
-**⚠️ CRITICAL:** Enforce correct member order (relays → webView → attachments) to prevent release build crashes.
-
-### File 2: v[N]-PluginEditor.cpp (C++ Implementation)
-
-**Base template:** `assets/webview-templates/PluginEditor-webview.cpp`
-
-**Key replacements:**
-
-**{{RELAY_CREATION}}** → Generate relay creation code (before WebView):
-
-```cpp
-// For each parameter (use parameter IDs from Phase 6 extraction):
-gainRelay = std::make_unique<juce::WebSliderRelay>("GAIN");
-toneRelay = std::make_unique<juce::WebSliderRelay>("TONE");
-bypassRelay = std::make_unique<juce::WebToggleButtonRelay>("BYPASS");
-modeRelay = std::make_unique<juce::WebComboBoxRelay>("MODE");
-```
-
-**{{WEBVIEW_OPTIONS}}** → Generate WebView options registration:
-
-```cpp
-// For each relay:
-.withOptionsFrom(*gainRelay)
-.withOptionsFrom(*toneRelay)
-.withOptionsFrom(*bypassRelay)
-.withOptionsFrom(*modeRelay)
-```
-
-**{{ATTACHMENT_CREATION}}** → Generate attachment creation code (after WebView):
-
-```cpp
-// For each parameter:
-gainAttachment = std::make_unique<juce::WebSliderParameterAttachment>(
-    *audioProcessor.apvts.getParameter("GAIN"),
-    *gainRelay,
-    nullptr  // No undo manager
-);
-toneAttachment = std::make_unique<juce::WebSliderParameterAttachment>(
-    *audioProcessor.apvts.getParameter("TONE"),
-    *toneRelay,
-    nullptr
-);
-bypassAttachment = std::make_unique<juce::WebToggleButtonParameterAttachment>(
-    *audioProcessor.apvts.getParameter("BYPASS"),
-    *bypassRelay,
-    nullptr
-);
-modeAttachment = std::make_unique<juce::WebComboBoxParameterAttachment>(
-    *audioProcessor.apvts.getParameter("MODE"),
-    *modeRelay,
-    nullptr
-);
-```
-
-**{{RESOURCE_MAPPING}}** → Generate resource provider mappings for all UI files:
-
-```cpp
-if (url == "/" || url == "/index.html") {
-    return juce::WebBrowserComponent::Resource {
-        BinaryData::index_html,
-        BinaryData::index_htmlSize,
-        "text/html"
-    };
-}
-
-if (url == "/js/juce/index.js") {
-    return juce::WebBrowserComponent::Resource {
-        BinaryData::juce_index_js,
-        BinaryData::juce_index_jsSize,
-        "text/javascript"
-    };
-}
-
-// Add more resources as needed (CSS, images, etc.)
-```
-
-**{{DETERMINE_SIZE_FROM_MOCKUP}}** → Extract window size from YAML or HTML:
-
-```cpp
-setSize(600, 400);  // From YAML window.width/height
-setResizable(false, false);  // From YAML window.resizable
-```
-
-**See:** `assets/webview-templates/` for complete template files
+**See:** `references/cpp-boilerplate-generation.md` for complete template details and variable mapping
 
 ## Phase 8: Generate Build Configuration (After Finalization Only)
 
@@ -704,37 +607,15 @@ setResizable(false, false);  // From YAML window.resizable
 
 **IMPORTANT:** This is a SNIPPET to append to existing plugin CMakeLists.txt, NOT a complete CMakeLists.txt file.
 
-### Generation Strategy
+**Generation strategy:** Use template from `references/cmake-generation.md`.
+
+**Required inputs:**
+- Plugin name (PascalCase)
+- Current version number [N]
 
 **Base template:** `assets/webview-templates/CMakeLists-webview-snippet.cmake`
 
-**Critical constraints:**
-
-- ❌ DO NOT include `project()` declaration (handled by root CMakeLists.txt)
-- ❌ DO NOT include `add_subdirectory(JUCE)` (JUCE added at root level)
-- ✅ This snippet should be APPENDED to the plugin's existing CMakeLists.txt
-- ✅ Plugin CMakeLists.txt should already have `juce_add_plugin()` and basic configuration
-
-**Key customizations:**
-
-1. **List all resources from ui/public/ directory:**
-
-```cmake
-juce_add_binary_data(${PLUGIN_NAME}_UIResources
-    SOURCES
-        Source/ui/public/index.html
-        Source/ui/public/js/juce/index.js
-        # Add any additional CSS, images, fonts discovered in HTML
-)
-```
-
-2. **Platform-specific configuration:**
-
-- macOS: No additional config (uses WebKit built-in)
-- Windows: Include WebView2 options (if cross-platform)
-- Linux: Include webkit2gtk dependency (if cross-platform)
-
-**See:** `assets/webview-templates/CMakeLists-webview-snippet.cmake` for complete template
+**See:** `references/cmake-generation.md` for complete template structure and integration instructions
 
 ## Phase 9: Generate Integration Checklist (After Finalization Only)
 
@@ -831,9 +712,16 @@ juce_add_binary_data(${PLUGIN_NAME}_UIResources
 
 **See:** `assets/parameter-spec-template.md`
 
+<state_requirement>
+<commit_protocol phase="finalization">
 ## Phase 10.5: Finalization Commit
 
-**CRITICAL: Commit all implementation files and update workflow state.**
+**MUST commit all implementation files and update workflow state.**
+
+**Files to commit:**
+- All 7 mockup files (v[N]-*.{html,yaml,h,cpp,txt,md})
+- parameter-spec.md (if v1 only)
+- .continue-here.md (workflow state)
 
 **After Phase 10 completes (all 7 files generated):**
 
@@ -849,19 +737,21 @@ fi
 git commit -m "feat([PluginName]): UI mockup v[N] finalized (implementation files)"
 ```
 
-**Update workflow state (if in workflow context):**
-
+**State updates required:**
 ```bash
-if [ -f "plugins/[PluginName]/.ideas/.continue-here.md" ]; then
-    # Update finalization status
-    sed -i '' "s/mockup_finalized: .*/mockup_finalized: true/" .continue-here.md
-    sed -i '' "s/finalized_version: .*/finalized_version: [N]/" .continue-here.md
-    sed -i '' "s/stage_0_status: .*/stage_0_status: ui_design_complete/" .continue-here.md
-
-    git add .continue-here.md
-    git commit --amend --no-edit
-fi
+# Update .continue-here.md
+sed -i '' "s/mockup_finalized: .*/mockup_finalized: true/" .continue-here.md
+sed -i '' "s/finalized_version: .*/finalized_version: [N]/" .continue-here.md
+sed -i '' "s/stage_0_status: .*/stage_0_status: ui_design_complete/" .continue-here.md
 ```
+
+**Verification:**
+- [ ] Git commit succeeded
+- [ ] .continue-here.md updated
+- [ ] mockup_finalized: true
+- [ ] stage_0_status: ui_design_complete
+
+ONLY proceed to "After Completing All Phases" menu if verification passes.
 
 **Updated state in `.continue-here.md`:**
 
@@ -878,6 +768,11 @@ finalized_version: 2
 - Enables `/continue` to resume at Stage 1
 - Records which version was finalized (if multiple exist)
 - Atomic commit of all implementation files
+</commit_protocol>
+</state_requirement>
+
+</critical_sequence>
+</conditional_execution>
 
 ## After Completing All Phases
 
@@ -897,32 +792,18 @@ Choose (1-4): _
 
 ## Versioning Strategy
 
-**v1, v2, v3...** Each UI version is saved separately.
+**Pattern:** v1, v2, v3... Each UI version is saved separately.
 
-**Why multiple versions:**
-
+**Purpose:**
 - Explore different layouts without losing previous work
-- A/B test designs in browser before committing
-- Iterate based on user feedback
-- Keep design history
+- A/B test designs before committing
+- Keep design history for rollback
 
-**File naming:**
+**File naming:** All 7 files prefixed with version (e.g., `v2-ui.html`, `v2-PluginEditor.h`)
 
-```
-plugins/[Name]/.ideas/mockups/
-├── v1-ui.yaml
-├── v1-ui.html
-├── v1-browser-test.html
-├── v1-PluginEditor.h
-├── v1-PluginEditor.cpp
-├── v1-CMakeLists.txt
-├── v1-integration-checklist.md
-├── v2-ui.yaml  (if user wants alternative design)
-├── v2-ui.html
-└── ... (v2 variants)
-```
+**Implementation:** Latest version used for Stage 5 unless user specifies different version.
 
-**Latest version is used for Stage 5 implementation** (unless user specifies different version).
+**See:** `references/versioning.md` for file management details.
 
 ## Success Criteria
 

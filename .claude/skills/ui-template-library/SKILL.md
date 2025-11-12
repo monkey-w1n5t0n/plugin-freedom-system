@@ -35,6 +35,8 @@ The aesthetic system separates **visual design language** (colors, control styli
 
 ## Operations
 
+**You MUST determine which operation the user is requesting, then execute ONLY that operation.**
+
 1. **Save aesthetic** - Analyze mockup HTML and generate structured prose aesthetic.md
 2. **Apply aesthetic** - Interpret aesthetic.md to generate new mockup with appropriate layout
 3. **List aesthetics** - Show all saved aesthetics with prose summaries
@@ -60,541 +62,116 @@ The aesthetic system separates **visual design language** (colors, control styli
 
 ---
 
+<operation name="save_aesthetic">
+  <purpose>Capture visual design from mockup as structured prose aesthetic.md</purpose>
+
+  <critical_sequence>
+    <step id="1" required="true">
+      Read mockup HTML file into memory (Read tool)
+    </step>
+    <step id="2" required="true" depends_on="1">
+      Extract visual patterns using pattern-extraction.md strategies
+    </step>
+    <step id="3" required="true" depends_on="2">
+      Generate prose descriptions using prose-generation.md guidelines
+    </step>
+    <step id="4" required="true" depends_on="3">
+      Write aesthetic.md following aesthetic-template.md structure exactly
+    </step>
+    <step id="5" required="true" depends_on="4">
+      Copy preview.html to aesthetic directory
+    </step>
+    <step id="6" required="true" depends_on="5">
+      Generate metadata.json with inferred tags
+    </step>
+    <step id="7" required="true" depends_on="6">
+      Update manifest.json using Read → modify → Write pattern
+    </step>
+    <step id="8" required="true" depends_on="7">
+      Present confirmation + decision menu
+    </step>
+  </critical_sequence>
+
+  <state_requirement>
+    <before_completion>
+      ALL steps 1-7 must complete successfully
+      IF any step fails: halt, report error, DO NOT proceed to step 8
+    </before_completion>
+
+    <verification>
+      Before step 8:
+      - VERIFY aesthetic.md exists and is not empty
+      - VERIFY preview.html exists
+      - VERIFY metadata.json is valid JSON
+      - VERIFY manifest.json updated successfully
+    </verification>
+  </state_requirement>
+
+
 ## Operation 1: Save Aesthetic
 
-**Input:** Path to finalized mockup HTML
-**Output:** New aesthetic in `.claude/aesthetics/[aesthetic-id]/`
+**High-level summary:**
+Read mockup HTML, extract visual patterns, generate prose descriptions, write aesthetic.md following template structure, copy preview HTML, generate metadata, update manifest, present decision menu.
 
-**High-level process:**
-1. Read and analyze mockup HTML using string/pattern matching
-2. Extract visual patterns (colors, fonts, control types, spacing)
-3. Generate prose descriptions for each aesthetic section
-4. Write structured aesthetic.md following template
-5. Copy preview.html and generate metadata.json
-6. Update manifest.json
-
-### Step 1: Read Mockup HTML
-
-```bash
-MOCKUP_PATH="plugins/$PLUGIN_NAME/.ideas/mockups/v$N-ui.html"
-test -f "$MOCKUP_PATH" || { echo "Mockup not found"; exit 1; }
-```
-
-**Use Read tool to load HTML content into memory for analysis.**
-
-### Step 2: Extract Visual Patterns
-
-**Use pattern matching (grep/sed) and string analysis to extract:**
-
-**Colors:**
-```bash
-# Extract hex colors from CSS
-grep -oE '#[0-9a-fA-F]{3,6}' "$MOCKUP_PATH" | sort -u
-
-# Extract rgba colors
-grep -oE 'rgba?\([^)]+\)' "$MOCKUP_PATH" | sort -u
-
-# Extract CSS custom properties
-grep -oE '--[a-zA-Z-]+:\s*[^;]+' "$MOCKUP_PATH"
-```
-
-**Fonts:**
-```bash
-# Extract font-family declarations
-grep -oE "font-family:\s*[^;]+" "$MOCKUP_PATH" | \
-    sed "s/font-family:\s*//" | \
-    sort -u
-```
-
-**Control types:**
-```bash
-# Detect rotary knobs
-grep -q "rotary\|knob" "$MOCKUP_PATH" && echo "Has rotary knobs"
-
-# Detect sliders
-grep -q "slider\|range" "$MOCKUP_PATH" && echo "Has sliders"
-
-# Detect buttons
-grep -q "button\|toggle" "$MOCKUP_PATH" && echo "Has buttons"
-```
-
-**Spacing values:**
-```bash
-# Extract gap, padding, margin values
-grep -oE "(gap|padding|margin):\s*[0-9]+px" "$MOCKUP_PATH" | \
-    awk -F': ' '{print $2}' | \
-    sort -n
-```
-
-**See:** `references/pattern-extraction.md` for complete extraction strategies
-
-### Step 3: Generate Prose Descriptions
-
-**Transform extracted patterns into interpretable prose:**
-
-**Example color extraction → prose:**
-```
-Extracted: #ff6b35, #2b2015, #f5e6d3
-↓
-Prose: "Warm vintage palette with burnt orange accent (#ff6b35) against
-       dark brown background (#2b2015). Cream text (#f5e6d3) provides
-       high contrast. Overall feel is retro/analog hardware."
-```
-
-**Example spacing extraction → prose:**
-```
-Extracted: gap: 32px, padding: 24px, margin: 16px
-↓
-Prose: "Generous spacing philosophy. Controls separated by 32px creating
-       comfortable breathing room. Section padding of 24px maintains visual
-       hierarchy. Not cluttered - each element has space to be appreciated."
-```
-
-**Example control detection → prose:**
-```
-Detected: .rotary-knob class, border-radius: 50%, tick marks
-↓
-Prose: "Rotary knobs with prominent tick marks around perimeter. Circular
-       shape (border-radius: 50%) with ~70px diameter. Brass/orange coloring
-       with center dot indicator. Style: vintage hardware, tactile feel."
-```
-
-**See:** `references/prose-generation.md` for detailed generation guidelines
-
-### Step 4: Write Structured aesthetic.md
-
-**Load template:**
-```bash
-TEMPLATE=".claude/skills/ui-template-library/assets/aesthetic-template.md"
-```
-
-**Fill in all sections using generated prose:**
-
-1. **Visual Identity** - Overall vibe summary (2-3 sentences)
-2. **Color System** - Primary palette, control colors, philosophy
-3. **Typography** - Font families, sizing, styling, philosophy
-4. **Controls** - Knob style, slider style, button style (detailed descriptions)
-5. **Spacing & Layout Philosophy** - Density, gaps, adaptation strategy
-6. **Surface Treatment** - Textures, depth, shadows, borders
-7. **Details & Embellishments** - Special features, interactions
-8. **Technical Patterns** - Border radius, transitions, layout techniques
-9. **Interaction Feel** - Responsiveness, feedback, tactility
-10. **Best Suited For** - Plugin types, design contexts
-11. **Application Guidelines** - Parameter count adaptation, customization points
-12. **Example Color Codes** - Concrete CSS values as reference
-
-**Critical: Follow template structure exactly. Same sections, same order, every time.**
-
-**Write aesthetic.md:**
-```bash
-AESTHETIC_ID=$(generate_aesthetic_id "$AESTHETIC_NAME")
-AESTHETIC_DIR=".claude/aesthetics/$AESTHETIC_ID"
-mkdir -p "$AESTHETIC_DIR"
-
-# Fill template with generated prose
-cat "$TEMPLATE" | \
-    sed "s/\[Aesthetic Name\]/$AESTHETIC_NAME/" | \
-    # ... more replacements with generated prose ...
-    > "$AESTHETIC_DIR/aesthetic.md"
-```
-
-### Step 5: Copy Preview HTML
-
-```bash
-cp "$MOCKUP_PATH" "$AESTHETIC_DIR/preview.html"
-```
-
-This provides visual reference alongside prose description.
-
-### Step 6: Generate Metadata
-
-**Create metadata.json:**
-```json
-{
-  "id": "vintage-hardware-001",
-  "name": "Vintage Hardware",
-  "description": "Warm, retro, skeuomorphic design with brass controls and textured background",
-  "sourcePlugin": "TapeAge",
-  "sourceVersion": "v2",
-  "created": "2025-11-11T10:30:00Z",
-  "usedInPlugins": ["TapeAge"],
-  "tags": ["vintage", "warm", "skeuomorphic", "brass", "retro"]
-}
-```
-
-**Aesthetic ID generation:**
-- Slugify name: "Vintage Hardware" → "vintage-hardware"
-- Append counter: "vintage-hardware-001"
-- Increment if ID already exists
-
-**Tag inference from prose:**
-- Analyze aesthetic.md content for keywords
-- Extract style descriptors: vintage, modern, minimal, aggressive, etc.
-- Extract color descriptors: warm, cool, dark, bright, etc.
-- Extract feel descriptors: tactile, smooth, technical, playful, etc.
-
-### Step 7: Update Manifest
-
-**Read existing manifest:**
-```bash
-MANIFEST=".claude/aesthetics/manifest.json"
-```
-
-**Append new aesthetic entry:**
-```json
-{
-  "version": "1.0",
-  "aesthetics": [
-    {
-      "id": "vintage-hardware-001",
-      "name": "Vintage Hardware",
-      "description": "Warm, retro, skeuomorphic design",
-      "sourcePlugin": "TapeAge",
-      "created": "2025-11-11T10:30:00Z",
-      "tags": ["vintage", "warm", "skeuomorphic"]
-    }
-  ]
-}
-```
-
-**Write updated manifest using Read → modify → Write pattern.**
-
-### Step 8: Confirmation
-
-```
-✅ Aesthetic saved: "Vintage Hardware" (vintage-hardware-001)
-
-Files created:
-- .claude/aesthetics/vintage-hardware-001/aesthetic.md (prose description)
-- .claude/aesthetics/vintage-hardware-001/preview.html (visual reference)
-- .claude/aesthetics/vintage-hardware-001/metadata.json (metadata)
-
-Preview: open .claude/aesthetics/vintage-hardware-001/preview.html
-
-You can now apply this aesthetic to new plugins:
-- From ui-mockup skill: Choose "Start from aesthetic template"
-- Or manually invoke: ui-template-library with "apply" operation
-```
-
+**See:** `references/save-operation.md` for complete 8-step workflow.
 ---
+
+<operation name="apply_aesthetic">
+  <purpose>Generate new mockup by interpreting aesthetic prose and adapting to target plugin</purpose>
+
+  <critical_sequence>
+    <step id="1" required="true">
+      Load aesthetic.md and metadata.json (Read tool)
+    </step>
+    <step id="2" required="true">
+      Read target plugin parameter-spec.md or creative-brief.md
+    </step>
+    <step id="3" required="true" depends_on="1,2">
+      Interpret aesthetic prose using aesthetic-interpretation.md strategies
+    </step>
+    <step id="4" required="true" depends_on="3">
+      Choose layout based on parameter count (layout-generation.md)
+    </step>
+    <step id="5" required="true" depends_on="3,4">
+      Generate HTML/CSS applying aesthetic to chosen layout
+    </step>
+    <step id="6" required="true" depends_on="5">
+      Save generated mockup to target plugin mockups directory
+    </step>
+    <step id="7" required="true" depends_on="6">
+      Update aesthetic metadata.json usedInPlugins array
+    </step>
+    <step id="8" required="true" depends_on="7">
+      Present decision menu (inline numbered, NOT AskUserQuestion)
+    </step>
+  </critical_sequence>
+
+  <decision_gate wait_required="true">
+    Present decision menu with preview/continue options
+    MUST wait for user response
+  </decision_gate>
+
 
 ## Operation 2: Apply Aesthetic
 
-**Input:**
-- Aesthetic ID
-- Target plugin name
-- Parameter spec (count, types, IDs)
+**High-level summary:**
+Load aesthetic prose and plugin requirements, interpret aesthetic into specific CSS values, choose layout based on parameter count, generate HTML applying aesthetic to layout, save to plugin mockups directory, update aesthetic metadata, present decision menu.
 
-**Output:** Generated mockup HTML with aesthetic applied + appropriate layout
-
-**High-level process:**
-1. Read aesthetic.md (structured prose)
-2. Read target plugin parameter-spec.md or creative-brief.md
-3. Interpret aesthetic prose to extract design rules
-4. Choose layout based on parameter count
-5. Generate HTML/CSS applying aesthetic rules to layout
-6. Save generated mockup to target plugin
-
-### Step 1: Load Aesthetic
-
-```bash
-AESTHETIC_DIR=".claude/aesthetics/$AESTHETIC_ID"
-AESTHETIC_MD="$AESTHETIC_DIR/aesthetic.md"
-METADATA_JSON="$AESTHETIC_DIR/metadata.json"
-
-test -f "$AESTHETIC_MD" || { echo "Aesthetic not found"; exit 1; }
-```
-
-**Use Read tool to load aesthetic.md and metadata.json.**
-
-### Step 2: Read Target Plugin Spec
-
-```bash
-PLUGIN_DIR="plugins/$PLUGIN_NAME"
-PARAM_SPEC="$PLUGIN_DIR/.ideas/parameter-spec.md"
-BRIEF="$PLUGIN_DIR/.ideas/creative-brief.md"
-
-# Try parameter-spec.md first, fall back to creative-brief.md
-if [ -f "$PARAM_SPEC" ]; then
-    SOURCE="$PARAM_SPEC"
-else
-    SOURCE="$BRIEF"
-fi
-```
-
-**Extract from spec:**
-- Parameter count
-- Parameter IDs and names
-- Parameter types (FLOAT, BOOL, CHOICE)
-- Default values and ranges
-- Prominent parameters (Mix, Output, Dry/Wet)
-
-**Example parsed parameters:**
-```javascript
-const parameters = [
-    { id: 'GAIN', name: 'Gain', type: 'FLOAT', prominent: false },
-    { id: 'TONE', name: 'Tone', type: 'FLOAT', prominent: false },
-    { id: 'MIX', name: 'Mix', type: 'FLOAT', prominent: true },
-    { id: 'BYPASS', name: 'Bypass', type: 'BOOL', prominent: false },
-];
-```
-
-### Step 3: Interpret Aesthetic Prose
-
-**Parse aesthetic.md sections to extract design decisions:**
-
-**Color System section:**
-- Parse "Background Colors" prose → extract color values and usage contexts
-- Parse "Accent Colors" prose → extract accent hierarchy
-- Parse "Philosophy" → understand warm/cool, contrast, mood
-
-**Controls section:**
-- Parse "Knob Style" prose → understand shape, size, indicator style
-- Parse "Slider Style" prose → understand orientation, thumb design
-- Parse "Button Style" prose → understand shape, states
-
-**Spacing section:**
-- Parse "Overall Density" prose → choose tight/comfortable/generous gaps
-- Parse "Control Spacing" prose → extract pixel values or relative approach
-
-**Typography section:**
-- Parse "Font Families" prose → extract font stacks or fallbacks
-- Parse "Font Sizing" prose → extract size hierarchy
-
-**See:** `references/aesthetic-interpretation.md` for detailed interpretation strategies
-
-### Step 4: Choose Appropriate Layout
-
-**Decision tree based on parameter count:**
-
-```javascript
-function chooseLayout(paramCount) {
-    if (paramCount <= 3) {
-        return 'horizontal-row';  // Single row
-    } else if (paramCount <= 6) {
-        return 'grid-2x3';  // 2 rows, up to 3 columns
-    } else if (paramCount <= 9) {
-        return 'grid-3x3';  // 3x3 grid
-    } else if (paramCount <= 12) {
-        return 'grid-4x3';  // 4 rows, 3 columns
-    } else {
-        return 'scrollable-grid';  // Larger grid with scrolling
-    }
-}
-
-const layout = chooseLayout(parameters.length);
-```
-
-**Separate prominent parameters:**
-```javascript
-const prominentParams = parameters.filter(isProminentParameter);
-const regularParams = parameters.filter(p => !isProminentParameter(p));
-```
-
-**Layout modifications for prominent params:**
-- If 1-2 prominent params exist: Place as side sliders or bottom row
-- If 3+ prominent params: Integrate into main grid with visual distinction
-
-**Consult aesthetic.md "Application Guidelines" section:**
-- Check "Parameter Count Adaptation" subsection for layout preferences
-- Check "Prominent Parameter Handling" for visual distinction strategy
-
-### Step 5: Generate HTML with Aesthetic
-
-**Strategy: Template-based generation with aesthetic insertions**
-
-**Base structure:**
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{PLUGIN_NAME}}</title>
-    <style>
-        /* Apply aesthetic color system */
-        :root {
-            {{INSERT_CSS_VARIABLES_FROM_AESTHETIC}}
-        }
-
-        html, body {
-            margin: 0;
-            padding: 0;
-            height: 100%;  /* NOT 100vh - WebView constraint */
-            background: var(--bg-main);
-            color: var(--text-primary);
-            font-family: {{FONT_FAMILY_FROM_AESTHETIC}};
-            user-select: none;  /* Native feel */
-        }
-
-        /* Apply layout based on parameter count */
-        .controls {
-            {{GENERATE_LAYOUT_CSS}}
-        }
-
-        /* Apply control styling from aesthetic */
-        {{GENERATE_KNOB_CSS_FROM_AESTHETIC}}
-        {{GENERATE_SLIDER_CSS_FROM_AESTHETIC}}
-        {{GENERATE_BUTTON_CSS_FROM_AESTHETIC}}
-    </style>
-</head>
-<body>
-    <h1>{{PLUGIN_NAME}}</h1>
-
-    <div class="controls">
-        {{FOR_EACH_PARAMETER_GENERATE_CONTROL_HTML}}
-    </div>
-
-    <script>
-        {{GENERATE_PARAMETER_BINDING_JS}}
-    </script>
-</body>
-</html>
-```
-
-**CSS variable generation from aesthetic prose:**
-```javascript
-// Parse "Example Color Codes" section from aesthetic.md
-// Extract CSS variable definitions or generate from prose descriptions
-
-const cssVars = `
-    --bg-main: ${extractColor(aesthetic, 'main background')};
-    --bg-surface: ${extractColor(aesthetic, 'surface background')};
-    --accent-primary: ${extractColor(aesthetic, 'primary accent')};
-    --accent-hover: ${extractColor(aesthetic, 'hover state')};
-    --text-primary: ${extractColor(aesthetic, 'primary text')};
-    --text-secondary: ${extractColor(aesthetic, 'secondary text')};
-    --control-base: ${extractColor(aesthetic, 'control base')};
-    --control-active: ${extractColor(aesthetic, 'control active')};
-`;
-```
-
-**Knob CSS generation from aesthetic prose:**
-```javascript
-// Parse "Knob Style" section from aesthetic.md
-// Extract: size, border style, shadow, indicator type
-
-function generateKnobCSS(aestheticKnobSection) {
-    // Extract size description: "medium (70px)" → 70px
-    const size = extractSize(aestheticKnobSection) || '70px';
-
-    // Extract shape: "Circle" → border-radius: 50%
-    const borderRadius = aestheticKnobSection.includes('circle') ? '50%' : '8px';
-
-    // Extract shadow from "Surface Treatment" section
-    const shadow = extractShadowStyle(aesthetic) || 'none';
-
-    return `
-        .rotary-knob {
-            width: ${size};
-            height: ${size};
-            border-radius: ${borderRadius};
-            border: 2px solid var(--control-base);
-            box-shadow: ${shadow};
-            background: var(--control-base);
-        }
-    `;
-}
-```
-
-**Layout CSS generation from parameter count + aesthetic spacing:**
-```javascript
-function generateLayoutCSS(layout, aesthetic) {
-    // Extract spacing values from "Spacing & Layout Philosophy" section
-    const gap = extractSpacingValue(aesthetic, 'between controls') || '24px';
-
-    if (layout === 'horizontal-row') {
-        return `
-            display: flex;
-            flex-direction: row;
-            gap: ${gap};
-            justify-content: center;
-            align-items: center;
-        `;
-    } else if (layout === 'grid-2x3') {
-        return `
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(2, auto);
-            gap: ${gap};
-        `;
-    }
-    // ... more layouts
-}
-```
-
-**Control HTML generation per parameter:**
-```javascript
-function generateControlHTML(param, aesthetic) {
-    // Determine control type from parameter type + aesthetic preferences
-    const controlType = determineControlType(param, aesthetic);
-
-    if (controlType === 'rotary-knob') {
-        return `
-            <div class="control-wrapper">
-                <div class="rotary-knob" data-param="${param.id}">
-                    <div class="knob-indicator"></div>
-                </div>
-                <label>${param.name}</label>
-            </div>
-        `;
-    }
-    // ... other control types
-}
-```
-
-### Step 6: Save Generated Mockup
-
-```bash
-MOCKUP_DIR="plugins/$PLUGIN_NAME/.ideas/mockups"
-mkdir -p "$MOCKUP_DIR"
-
-# Determine next version number
-VERSION=$(find_next_version "$MOCKUP_DIR")
-
-# Save with aesthetic source comment
-echo "<!-- Generated from aesthetic: $AESTHETIC_ID -->" > \
-    "$MOCKUP_DIR/v${VERSION}-ui-test.html"
-cat generated_mockup.html >> \
-    "$MOCKUP_DIR/v${VERSION}-ui-test.html"
-```
-
-**Naming convention:**
-- First application: `v1-ui-test.html` (user can iterate and finalize)
-- Aesthetic comment at top documents source
-
-### Step 7: Update Aesthetic Metadata
-
-**Track usage:**
-```bash
-# Read metadata.json
-# Add $PLUGIN_NAME to "usedInPlugins" array if not already present
-# Write updated metadata.json
-```
-
-### Step 8: Present Decision Menu
-
-```
-✅ Mockup v1-test generated with "Vintage Hardware" aesthetic
-
-Files created:
-- plugins/ReverbPlugin/.ideas/mockups/v1-ui-test.html
-
-Applied aesthetic:
-- Layout: 3x3 grid (8 knobs) + 2 vertical sliders for prominent params
-- Colors: Warm vintage palette (orange/brown/cream)
-- Controls: Brass rotary knobs with tick marks
-- Spacing: Generous (32px gaps)
-- Surface: Subtle paper texture
-
-What's next?
-1. Preview in browser - Open v1-ui-test.html
-2. Continue with ui-mockup skill - Generate full scaffolding
-3. Iterate design - Adjust and regenerate
-4. Choose different aesthetic - Try another template
-```
-
+**See:** `references/apply-operation.md` for complete 8-step workflow.
 ---
+
+<operation name="list_aesthetics">
+  <critical_sequence>
+    <step id="1" required="true">Read manifest.json</step>
+    <step id="2" required="true">Format as markdown table</step>
+    <step id="3" required="true">Show preview paths</step>
+    <step id="4" required="true">Present decision menu</step>
+  </critical_sequence>
+
+  <decision_gate wait_required="true">
+    Wait for user to select action from menu
+  </decision_gate>
+
 
 ## Operation 3: List Aesthetics
 
@@ -741,30 +318,53 @@ Remaining aesthetics: 1
 
 ## Integration with ui-mockup Skill
 
-**Invocation from ui-mockup Phase 0:**
+<handoff_protocol>
+  <from_skill>ui-mockup</from_skill>
+  <to_skill>ui-template-library</to_skill>
 
-```markdown
-If aesthetics exist in library:
-  ui-mockup presents menu:
-    1. Start from aesthetic template → Invoke ui-template-library "apply"
-    2. Start from scratch → Continue normal ui-mockup flow
-    3. List all aesthetics → Invoke ui-template-library "list"
-```
+  <trigger_conditions>
+    <condition when="Phase 0" if="aesthetics exist in library">
+      ui-mockup presents option "Start from aesthetic template"
+      User selects option → invoke ui-template-library "apply" operation
+    </condition>
+    <condition when="Phase 5.5 decision menu">
+      ui-mockup presents option "Save as aesthetic template"
+      User selects option → invoke ui-template-library "save" operation
+    </condition>
+  </trigger_conditions>
 
-**After mockup finalized (Phase 5.5 decision menu):**
+  <data_contract>
+    <input name="mockup_path" type="absolute_path" required="true">
+      Path to finalized mockup HTML file
+    </input>
+    <input name="plugin_name" type="string" required="true">
+      Name of plugin for aesthetic source tracking
+    </input>
+    <input name="aesthetic_name" type="string" required="false">
+      Optional custom name for aesthetic (defaults to plugin name)
+    </input>
+  </data_contract>
 
-```markdown
-Option 4: Save as aesthetic template
-  → Invoke ui-template-library "save" operation
+  <return_values>
+    <output name="aesthetic_id" type="string">
+      Generated aesthetic ID (e.g., "vintage-hardware-001")
+    </output>
+    <output name="aesthetic_path" type="absolute_path">
+      Path to aesthetic directory
+    </output>
+  </return_values>
+</handoff_protocol>
 
-Option 5: Finalize AND save aesthetic
-  → Invoke ui-template-library "save" then proceed to scaffolding
-```
-
-**See:** ui-mockup skill SKILL.md Phase 0 and Phase 5.5 for complete integration details
-
----
-
+<delegation_rule>
+  <from>ui-mockup skill</from>
+  <to>ui-template-library skill</to>
+  <method>inline_invocation</method>
+  <rationale>
+    Both skills are lightweight and stateless.
+    No need for separate agent context.
+    ui-mockup simply expands to include ui-template-library operations.
+  </rationale>
+</delegation_rule>
 ## Success Criteria
 
 **Save operation successful when:**

@@ -103,3 +103,39 @@ If creative brief says "vintage compressor" but doesn't specify:
 - Window size → Ask (or default to 600x400)
 - Control positions → Ask (or use standard horizontal flow)
 - Font → Use classic sans-serif (Inter, no script fonts for readability)
+
+## Example: Extracting from creative-brief.md
+
+**Creative brief excerpt:**
+```
+# LushVerb - Creative Brief
+
+## Core Concept
+A lush, musical reverb with three intuitive controls: Size, Damping, Mix.
+
+## Visual Aesthetic
+- Dark, moody background (deep blue-grey)
+- Three large rotary knobs in horizontal row
+- Vintage hardware-inspired styling
+```
+
+**Extracted context for Phase 1.5:**
+```
+Plugin: LushVerb
+Concept: Lush, musical reverb
+Controls: Size, Damping, Mix (three rotary knobs)
+Layout: Horizontal row
+Style: Vintage hardware, dark moody (deep blue-grey background)
+```
+
+**What to extract:**
+- Plugin name
+- Core concept (one sentence)
+- Control list (names and types)
+- Layout preference (if specified)
+- Visual aesthetic keywords (colors, style, mood)
+
+**What to skip:**
+- Detailed DSP descriptions
+- Technical implementation notes
+- Unrelated sections (if creative brief has multiple plugins)

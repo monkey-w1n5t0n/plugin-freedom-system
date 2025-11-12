@@ -12,6 +12,8 @@ Based on handoff content and user selection, route to appropriate skill.
 
 ### Step 4a-1: Check Orchestration Mode
 
+**NOTE:** The orchestration mode protocol is defined as a top-level delegation rule in the main SKILL.md. See "Orchestration Protocol" section for the primary specification.
+
 **IMPORTANT:** Before routing, check if handoff has orchestration mode enabled:
 
 ```yaml

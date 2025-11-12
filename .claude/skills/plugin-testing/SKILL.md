@@ -1,6 +1,6 @@
 ---
 name: plugin-testing
-description: Automated stability tests and validation suite
+description: Run automated stability tests, pluginval validation, and DAW testing for audio plugins. Invoke when user mentions test, validate, validation, pluginval, stability, automated tests, run tests, check plugin, or quality assurance
 allowed-tools:
   - Read
   - Bash
@@ -24,47 +24,20 @@ This skill provides three test modes:
 
 ## Phase 1: Detect Plugin and Mode Selection
 
-**Input:** User invokes `/test [PluginName]` or asks to test a plugin
+<decision_gate enforcement="strict">
+**You MUST complete ALL steps before presenting mode selection:**
 
-**Steps:**
+1. Parse plugin name from user input (extract from `/test [Name]` or natural language)
+2. Read `PLUGINS.md` and verify plugin exists
+3. Verify plugin status is NOT 💡 (implementation must exist)
+4. Check for Tests/ directory existence: `test -d "plugins/$PLUGIN_NAME/Tests/"`
 
-1. Parse plugin name from user input
-2. Verify plugin exists in `PLUGINS.md`
-3. Check plugin status - must NOT be 💡 (must have implementation)
-4. Check for Tests/ directory existence
+**Once validation complete, you MUST present mode selection menu** (see `assets/decision-menu-templates.md#mode-selection`)
 
-**If mode not specified, present decision menu:**
-
-```
-How would you like to test [PluginName]?
-
-1. Automated stability tests (~2 min)
-   → Quick C++ unit tests (parameter response, state save/load, CPU usage)
-   → Requires: Tests/ directory with Catch2 tests
-
-2. Build + pluginval (~5-10 min) ⭐ RECOMMENDED
-   → Industry-standard validation (50+ tests, strictness level 10)
-   → Tests: Thread safety, automation, state recall, audio validation
-   → Requires: Release build, pluginval installed
-
-3. Manual DAW testing (~30-60 min)
-   → Guided checklist for real-world testing
-   → Tests: Sonic quality, workflow, edge cases in actual DAW
-
-4. Skip testing (NOT RECOMMENDED)
-   → Proceed to installation without validation
-
-Choose (1-4): _
-```
-
-**Recommendation logic:**
-
-- If `Tests/` directory exists: Suggest option 1 first, then 2
-- If no `Tests/` directory: Recommend option 2 (pluginval)
-- Before final release: Always suggest option 2 + 3
+**You MUST NOT proceed to Phase 2 until user selects a mode (1-4)**
+</decision_gate>
 
 **Parse shorthand commands:**
-
 - `/test [PluginName] build` → Jump to Mode 2
 - `/test [PluginName] quick` → Jump to Mode 1
 - `/test [PluginName] manual` → Jump to Mode 3
@@ -73,345 +46,200 @@ Choose (1-4): _
 
 ### Mode 1: Automated Testing
 
-**See:** `references/test-specifications.md` for detailed test implementations
+<critical_sequence enforcement="strict">
+**You MUST execute these steps in exact order:**
 
-**Prerequisites check:**
+<step id="read_spec">
+**Step 1: Read Test Specifications**
 
+You MUST read `references/test-specifications.md` for detailed test implementations before proceeding.
+</step>
+
+<step id="check_tests" depends_on="read_spec">
+**Step 2: Check for Tests/ Directory**
+
+You MUST verify Tests/ directory exists:
 ```bash
-# Check for Tests/ directory
 test -d "plugins/$PLUGIN_NAME/Tests/"
-
-# Check for StabilityTests.cpp
-test -f "plugins/$PLUGIN_NAME/Tests/StabilityTests.cpp"
 ```
 
-**If missing:** Inform user that automated tests require test infrastructure and suggest Mode 2 (pluginval) instead.
+If missing: You MUST inform user that automated tests require test infrastructure and suggest Mode 2 (pluginval) as recommended alternative. Present decision menu from `assets/decision-menu-templates.md#missing-tests`.
+</step>
 
-**Build and run tests:**
+<step id="build" depends_on="check_tests">
+**Step 3: Build and Execute Tests**
 
-```bash
-cd build
-cmake .. -DBUILD_TESTS=ON
-cmake --build . --target ${PLUGIN_NAME}Tests
-./Tests/${PLUGIN_NAME}Tests
-```
+You MUST build and run tests (see `references/test-specifications.md#execution`).
+</step>
 
-**Parse test output:**
+<step id="parse" depends_on="build">
+**Step 4: Parse Test Results**
 
-- Extract pass/fail for each of 5 tests
-- Identify failed test names and error messages
-- Calculate pass rate (X/5 passed)
+You MUST parse test output and generate report using template from `assets/report-templates.md#mode1-results`.
+</step>
 
-**Report format:**
+<step id="present" depends_on="parse">
+**Step 5: Present Results**
 
-**All tests pass:**
-
-```
-✅ All tests PASSED (5/5)
-
-Parameter response: PASS (5/5 parameters respond correctly)
-State save/load: PASS (all parameters restore correctly)
-Silent input: PASS (output RMS: 0.00002 - essentially silent)
-Feedback test: PASS (max output over 1000 iterations: 1.2)
-CPU performance: PASS (real-time factor: 0.03 - using 3% CPU)
-
-Build: Release mode, macOS arm64, 44.1kHz, 512 samples
-```
-
-**Some tests fail:**
-
-```
-❌ Tests FAILED (3/5 passed)
-
-✅ Parameter response: PASS (5/5 parameters)
-❌ State save/load: FAIL - Parameters not restoring: [bypass, mix]
-✅ Silent input: PASS (output RMS: 0.0)
-❌ Feedback test: FAIL - Output exploding (iteration 247, max: 87.3)
-✅ CPU performance: PASS (real-time factor: 0.03)
-
-What would you like to do?
-1. Investigate failures (launch troubleshooting agents)
-2. Show test code (see exact test implementation)
-3. Show full test output (detailed logs)
-4. I'll fix manually
-5. Other
-
-Choose (1-5): _
-```
-
-**After results, offer next steps (see Phase 3)**
+You MUST present test results and post-test decision menu (see `assets/decision-menu-templates.md#post-test-mode1`). WAIT for user selection.
+</step>
+</critical_sequence>
 
 ### Mode 2: Build + Pluginval
 
-**See:** `references/pluginval-guide.md` for detailed implementation
+<critical_sequence enforcement="strict">
+**You MUST execute these steps in exact order:**
 
-**Prerequisites check:**
+<step id="prereq_check">
+**Step 1: Prerequisites Check**
 
+You MUST read `references/pluginval-guide.md#installation-check` for implementation details.
+
+Check for pluginval installation using script from reference file.
+
+**If pluginval not found:** You MUST present installation decision menu (see `assets/decision-menu-templates.md#pluginval-install`) and WAIT for user response. BLOCK execution until resolved.
+</step>
+
+<step id="build" depends_on="prereq_check">
+**Step 2: Build Release Binaries**
+
+You MUST build in Release mode (see `references/pluginval-guide.md#build-process`):
+
+Locate binaries:
 ```bash
-# Check for pluginval.app first (standard macOS install), then fall back to PATH
-if [ -x "/Applications/pluginval.app/Contents/MacOS/pluginval" ]; then
-    PLUGINVAL_PATH="/Applications/pluginval.app/Contents/MacOS/pluginval"
-elif command -v pluginval >/dev/null 2>&1; then
-    PLUGINVAL_PATH="pluginval"
-else
-    echo "Pluginval not found"
-    PLUGINVAL_PATH=""
-fi
-```
-
-**If missing:**
-
-```
-Pluginval not found.
-
-Install options:
-1. Via Homebrew: brew install --cask pluginval
-   (Installs to /Applications/pluginval.app)
-2. Download from: https://github.com/Tracktion/pluginval/releases
-   (Place in /Applications/pluginval.app)
-3. Skip pluginval, try automated tests instead
-
-After installing, pluginval.app should be in /Applications/
-No need to add to PATH or create symlinks.
-
-Choose (1-3): _
-```
-
-**Build release binaries:**
-
-```bash
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build . --config Release --parallel
-
-# Locate binaries
 VST3_PATH="build/plugins/$PLUGIN_NAME/${PLUGIN_NAME}_artefacts/Release/VST3/${PRODUCT_NAME}.vst3"
 AU_PATH="build/plugins/$PLUGIN_NAME/${PLUGIN_NAME}_artefacts/Release/AU/${PRODUCT_NAME}.component"
 ```
+</step>
 
-**Run pluginval:**
+<step id="validate" depends_on="build">
+**Step 3: Run Pluginval**
 
-```bash
-"${PLUGINVAL_PATH}" --validate "$VST3_PATH" \
-          --strictness-level 10 \
-          --timeout-ms 30000 \
-          --verbose
+You MUST validate both formats at strictness level 10 (see `references/pluginval-guide.md#execution`).
+</step>
 
-"${PLUGINVAL_PATH}" --validate "$AU_PATH" \
-          --strictness-level 10 \
-          --timeout-ms 30000 \
-          --verbose
-```
+<step id="parse" depends_on="validate">
+**Step 4: Parse Results**
 
-**Parse pluginval output** (see `references/pluginval-guide.md` for failure parsing)
+You MUST parse pluginval output (see `references/pluginval-guide.md#parsing-output`) and generate report using template from `assets/report-templates.md#mode2-results`.
+</step>
 
-**Report format:**
+<step id="present" depends_on="parse">
+**Step 5: Present Results and Next Steps**
 
-**All tests pass:**
-
-```
-✅ Build successful (Release mode)
-
-Binaries:
-- VST3: build/plugins/[Name]/[Name]_artefacts/Release/VST3/[Product].vst3 (2.4 MB)
-- AU: build/plugins/[Name]/[Name]_artefacts/Release/AU/[Product].component (2.4 MB)
-
-✅ Pluginval PASSED (strictness level 10)
-
-VST3: All 50 tests passed
-AU: All 50 tests passed
-
-Total validation time: 8.7s
-
-Plugin is ready for installation and real-world testing.
-```
-
-**Some tests fail:**
-
-```
-✗ Pluginval FAILED (47/50 passed)
-
-Failed tests:
-- [8/50] State save/load: Plugin state not restoring correctly
-- [23/50] Thread safety: Memory allocation in processBlock()
-- [34/50] AU validation: Component not code-signed
-
-What would you like to do?
-1. Investigate failures (detailed analysis)
-2. Show full pluginval output (complete logs)
-3. Continue anyway (NOT RECOMMENDED - failures may cause crashes)
-4. I'll fix manually
-5. Other
-
-Choose (1-5): _
-```
-
-**After results, offer next steps (see Phase 3)**
+You MUST present post-test decision menu (see `assets/decision-menu-templates.md#post-test-mode2`) and WAIT for user selection.
+</step>
+</critical_sequence>
 
 ### Mode 3: Manual DAW Testing
 
-**See:** `assets/manual-testing-checklist.md` for full template
+<critical_sequence enforcement="strict">
+**You MUST execute these steps in exact order:**
 
-**Load parameter spec:**
+<step id="read_guide">
+**Step 1: Read DAW Testing Guide**
 
-```bash
-# Read parameter-spec.md to generate specific tests
-cat "plugins/$PLUGIN_NAME/.ideas/parameter-spec.md"
-```
+You MUST read `references/manual-testing-guide.md` for complete manual testing procedures.
+</step>
 
-**Generate customized checklist:**
+<step id="generate_checklist" depends_on="read_guide">
+**Step 2: Generate Customized Checklist**
 
-1. Read `assets/manual-testing-checklist.md` template
-2. Extract parameters from `parameter-spec.md`
-3. Insert parameter-specific tests into checklist
-4. Display complete checklist to user
+You MUST generate customized checklist from `parameter-spec.md` tailored to plugin's specific parameters and features.
+</step>
 
-**Checklist structure:**
+<step id="present_checklist" depends_on="generate_checklist">
+**Step 3: Present Checklist**
 
-- Setup (load plugin in DAW)
-- Parameter testing (for each parameter from spec)
-- Automation testing
-- Preset recall
-- Project save/load
-- Sample rate changes
-- Buffer size changes
-- Channel configuration
-- Edge cases
-- Sonic quality
-- Stress testing
-- Cross-DAW testing (optional)
-- Final verification
-- Notes/issues section
+You MUST present checklist to user with instructions for manual testing in their DAW.
 
-**User confirms checklist completion, then offer next steps (see Phase 3)**
+Inform user to report back with results (pass/fail per item).
+</step>
 
-## Phase 3: Post-Test Decision Menu
+<step id="collect_results" depends_on="present_checklist">
+**Step 4: Collect Results**
 
-**After Mode 1 (automated tests) passes:**
+WAIT for user to complete manual testing and provide results.
 
-```
-✓ All automated tests passed (5/5)
+You MUST parse user's feedback and generate completion report.
+</step>
 
-What's next?
-1. Continue to next stage (if in workflow)
-2. Run pluginval for industry-standard validation (recommended)
-3. Install plugin (/install-plugin)
-4. Review detailed test results
-5. Other
+<step id="present_menu" depends_on="collect_results">
+**Step 5: Present Next Steps**
 
-Choose (1-5): _
-```
+You MUST present post-test decision menu (see `assets/decision-menu-templates.md#post-test-mode3`) and WAIT for user selection.
+</step>
+</critical_sequence>
 
-**After Mode 2 (pluginval) passes:**
+## Phase 3: Failure Investigation (Option 1)
 
-```
-✓ Pluginval passed (50/50 tests, strictness level 10)
-
-What's next?
-1. Install plugin to system folders (recommended)
-2. Run manual DAW testing checklist
-3. Review full validation report
-4. Build for distribution (future feature)
-5. Other
-
-Choose (1-5): _
-```
-
-**After Mode 3 (manual testing) complete:**
-
-```
-✓ Manual DAW testing complete
-
-What's next?
-1. Install plugin (/install-plugin) → Ready for production use
-2. Mark plugin as release-ready (update PLUGINS.md status)
-3. Report issues found (if any)
-4. Run additional automated tests
-5. Other
-
-Choose (1-5): _
-```
-
-## Phase 4: Failure Investigation (Option 1)
-
+<delegation_rule enforcement="strict">
 **When user chooses "Investigate failures":**
 
-**For each failed test:**
+<sequence>
+1. You MUST read `references/troubleshooting.md` for each failed test
+2. Provide initial fix recommendations from troubleshooting docs
+3. Offer code inspection option
 
-1. Read detailed explanation from `references/troubleshooting.md`
-2. Provide specific fix recommendations
-3. Offer to show relevant code sections
-4. If available (Phase 7), launch `Task` agent with `deep-research` to find root cause
+4. **For non-trivial issues (not documented in troubleshooting.md):**
 
-**Example investigation output:**
+   <handoff_protocol>
+   You MUST delegate to `deep-research` skill via Task tool:
 
-```
-Investigating "State save/load" failure...
+   ```
+   Task: "Investigate [test_name] failure in [PluginName]
 
-Root cause: Parameters not saved in getStateInformation()
+   Context:
+   - Test failed: [specific failure message]
+   - Plugin type: [from creative-brief.md]
+   - Relevant code: [file paths from investigation]
 
-The plugin is using raw AudioProcessor parameters instead of APVTS.
+   Goal: Find root cause and provide specific fix"
+   ```
 
-Fix:
-1. Open PluginProcessor.h
-2. Verify you have: juce::AudioProcessorValueTreeState apvts;
-3. Open PluginProcessor.cpp
-4. In getStateInformation():
-   auto state = apvts.copyState();
-   std::unique_ptr<juce::XmlElement> xml(state.createXml());
-   copyXmlToBinary(*xml, destData);
+   WAIT for deep-research completion before presenting results to user.
 
-5. In setStateInformation():
-   std::unique_ptr<juce::XmlElement> xml(getXmlFromBinary(data, sizeInBytes));
-   if (xml.get() != nullptr)
-       apvts.replaceState(juce::ValueTree::fromXml(*xml));
+   **NEVER attempt to fix complex issues without delegation to deep-research.**
+   </handoff_protocol>
+</sequence>
+</delegation_rule>
 
-This ensures APVTS handles all state management automatically.
+## Phase 4: Log Test Results
 
-Would you like me to:
-1. Show the current getStateInformation() implementation
-2. Launch deep-research agent to scan codebase
-3. I'll fix it myself
-4. Other
+<state_requirement enforcement="strict">
+**After completing ANY test mode (1, 2, or 3), you MUST:**
 
-Choose (1-4): _
-```
+<requirement id="save_log">
+**Requirement 1: Save Test Log**
 
-## Phase 5: Log Test Results
+You MUST save detailed test log to: `logs/[PluginName]/test_[timestamp].log`
 
-**Save detailed logs for every test run:**
+Use format from `assets/report-templates.md#test-log-format`
+</requirement>
 
-**Location:** `logs/[PluginName]/test_[timestamp].log`
+<requirement id="update_continue">
+**Requirement 2: Update .continue-here.md**
 
-**Log format:**
+You MUST update `.continue-here.md`:
+- Set current_stage: "testing_complete"
+- Set next_step based on test results (Stage 6 if passed, investigation if failed)
+- Record test_date: [timestamp]
+- Record test_mode: [1/2/3]
+</requirement>
 
-```
-================================================================================
-Test Report: [PluginName]
-================================================================================
-Date: 2025-01-10 14:32:17
-Mode: [Mode 1 / Mode 2 / Mode 3]
-Plugin: [PluginName] v1.0.0
-Formats: VST3, AU
+<requirement id="update_plugins">
+**Requirement 3: Update PLUGINS.md**
 
-[Mode-specific details]
+You MUST update `PLUGINS.md` for {PLUGIN_NAME}:
+- Set test_status: "✅ passed" or "❌ failed"
+- Record last_tested: [date]
+- Record test_mode_used: [Mode 1/2/3]
+</requirement>
 
-Test Results:
-[Pass/fail summary]
+**You MUST complete ALL three requirements before proceeding to decision menu.**
 
-Total time: [duration]
-
-Conclusion: [Plugin ready / Failures detected]
-================================================================================
-
-[Full output below]
-...
-```
-
-**Update state files:**
-
-- `.continue-here.md` → Mark testing complete, update next step
-- `PLUGINS.md` → Update test status (last tested date, results)
+VERIFY both state files updated before presenting next steps.
+</state_requirement>
 
 ## Success Criteria
 

@@ -1,6 +1,6 @@
 ---
 name: plugin-ideation
-description: Adaptive brainstorming for plugin concepts and improvements
+description: Adaptive brainstorming for plugin concepts and improvements. Autonomous triggers: "I want to make...", "Explore improvements to...", "brainstorm", "ideate", "new plugin", "improve plugin"
 allowed-tools:
   - Read
   - Write
@@ -15,20 +15,34 @@ preconditions:
 
 ## Mode Detection
 
+<critical_sequence>
+<sequence_name>mode_detection</sequence_name>
+<enforcement>must_complete_before_proceeding</enforcement>
+
+<step number="1" required="true">
 **Check if plugin exists:**
 
 ```bash
 grep "^### $PLUGIN_NAME$" PLUGINS.md
 ```
 
-- If found → **Improvement Mode**
-- If not found → **New Plugin Mode**
+**Route based on result:**
+- If found → Proceed to Improvement Mode (Line 338)
+- If not found → Proceed to New Plugin Mode (Line 27)
+</step>
+</critical_sequence>
 
 ## New Plugin Mode
 
+<critical_sequence>
+<sequence_name>new_plugin_workflow</sequence_name>
+<enforcement>must_complete_in_order</enforcement>
+<phases>
+
 ### Phase 1: Free-Form Collection
 
-Start with open question:
+<step number="1" required="true">
+MUST start with open question:
 ```
 What would you like to build?
 
@@ -43,9 +57,11 @@ Tell me about your plugin idea. Share as much or as little as you want—I'll as
 - UI vision and layout preferences
 - Use cases and target users
 - Inspirations and references
+</step>
 
 ### Phase 2: Gap Analysis and Question Prioritization
 
+<step number="2" required="true">
 **Question Priority Tiers:**
 
 - **Tier 1 (Critical):** Plugin type (effect/synth/utility), core concept (what it does)
@@ -77,10 +93,12 @@ Gaps identified:
 - Specific tape reference? (Tier 3)
 - Primary use case? (Tier 3)
 ```
+</step>
 
 ### Phase 3: Question Batch Generation
 
-**Generate exactly 4 questions using AskUserQuestion based on identified gaps.**
+<step number="3" required="true">
+**MUST generate exactly 4 questions using AskUserQuestion based on identified gaps.**
 
 **Rules:**
 - If 4+ gaps exist: ask top 4 by tier priority
@@ -135,10 +153,17 @@ Question 4:
 1. Accumulate context with previous responses
 2. Re-analyze gaps
 3. Proceed to decision gate
+</step>
 
 ### Phase 3.5: Decision Gate
 
-**Use AskUserQuestion with 3 options after each question batch:**
+<decision_gate>
+<gate_name>finalize_or_continue</gate_name>
+<blocking>true</blocking>
+<checkpoint_protocol>true</checkpoint_protocol>
+
+<step number="4" required="true">
+**MUST use AskUserQuestion with 3 options after each question batch:**
 
 ```
 Question:
@@ -148,12 +173,16 @@ Question:
     - label: "Yes, finalize it", description: "Create creative-brief.md"
     - label: "Ask me 4 more questions", description: "Continue refining"
     - label: "Let me add more context first", description: "Provide additional details"
+```
 
-Route based on answer:
+**MUST wait for user response. NEVER auto-proceed.**
+
+**Route based on answer:**
 - Option 1 → Proceed to Phase 4 (document creation)
 - Option 2 → Return to Phase 2 (re-analyze gaps, generate next 4 questions)
 - Option 3 → Collect free-form text, merge with context, return to Phase 2
-```
+</step>
+</decision_gate>
 
 **Context accumulation example:**
 
@@ -172,9 +201,10 @@ New gaps for Batch 2:
 
 ### Phase 3.7: Plugin Name (if not yet provided)
 
-**Before creating documents, check if plugin name was provided at any point during conversation.**
+<step number="5" required="true">
+**MUST check if plugin name was provided before creating documents.**
 
-If name NOT yet provided, ask via AskUserQuestion:
+If name NOT yet provided, MUST ask via AskUserQuestion:
 
 ```
 Question:
@@ -199,10 +229,12 @@ Examples:
 - Must be UpperCamelCase (e.g., "TapeAge", not "tape age" or "tapeage")
 - No spaces or special characters
 - If user provides invalid name, suggest cleaned version
+</step>
 
 ### Phase 4: Document Creation
 
-When user chooses "finalize" and name is confirmed, create:
+<step number="6" required="true">
+**MUST wait until user chooses "finalize" and name is confirmed, then create:**
 
 **File:** `plugins/[PluginName]/.ideas/creative-brief.md`
 
@@ -267,10 +299,16 @@ Add entry if doesn't exist:
 **Created:** [Date]
 **Description:** [One-sentence summary]
 ```
+</step>
 
 ### Phase 5: Session Handoff
 
-Create `.continue-here.md` in `plugins/[PluginName]/.ideas/`:
+<state_requirement>
+<requirement>must_create_continue_file</requirement>
+<step number="7" required="true">
+**MUST create handoff file for resuming later:**
+
+**File:** `plugins/[PluginName]/.ideas/.continue-here.md`
 
 **Format:**
 ```markdown
@@ -310,10 +348,18 @@ Creative brief has been finalized for [PluginName]. Ready to proceed to UI mocku
 **Files Created:**
 - plugins/[PluginName]/.ideas/creative-brief.md
 ```
+</step>
+</state_requirement>
 
 ### Phase 6: Decision Menu
 
-Present next steps:
+<decision_gate>
+<gate_name>next_action</gate_name>
+<blocking>true</blocking>
+<checkpoint_protocol>true</checkpoint_protocol>
+
+<step number="8" required="true">
+**MUST present next steps:**
 
 ```
 ✓ Creative brief complete: [PluginName]
@@ -328,16 +374,48 @@ What's next?
 Choose (1-5): _
 ```
 
+<delegation_rules>
 **Handle responses:**
-- Option 1 → Invoke `ui-mockup` skill
-- Option 2 → Invoke `plugin-workflow` skill (after warning about contracts)
-- Option 3 → Invoke `deep-research` skill (Phase 7 - stub for now, just acknowledge)
+
+<delegation_rule skill="ui-mockup" trigger="option_1">
+- Condition: User chooses option 1
+- Action: MUST invoke ui-mockup skill via Skill tool
+- Do NOT attempt to create mockup within this skill
+</delegation_rule>
+
+<delegation_rule skill="plugin-workflow" trigger="option_2">
+- Condition: User chooses option 2
+- Action: MUST invoke plugin-workflow skill via Skill tool
+- Warning: MUST warn user about contract requirements before delegating
+</delegation_rule>
+
+<delegation_rule skill="deep-research" trigger="option_3">
+- Condition: User chooses option 3
+- Action: MUST invoke deep-research skill via Skill tool
+- Note: deep-research skill is fully implemented (Phase 7 complete)
+</delegation_rule>
+
 - Option 4 → Confirm handoff file created, exit
 - Option 5 → Ask what they'd like to do
+</delegation_rules>
+</step>
+</decision_gate>
+
+</phases>
+</critical_sequence>
 
 ## Improvement Mode
 
+<critical_sequence>
+<sequence_name>improvement_workflow</sequence_name>
+<enforcement>must_complete_in_order</enforcement>
+<phases>
+
 ### Phase 0: Vagueness Detection
+
+<decision_gate>
+<gate_name>vagueness_check</gate_name>
+<blocking>true</blocking>
 
 Check if request is specific:
 
@@ -363,9 +441,11 @@ Choose (1-2): _
 
 If option 1 chosen, continue with improvement brainstorming.
 If option 2 chosen, exit to plugin-improve skill.
+</decision_gate>
 
 ### Phase 1: Free-Form Collection
 
+<step number="1" required="true">
 Ask:
 ```
 What would you like to improve in [PluginName]?
@@ -380,9 +460,11 @@ Describe what you want to change, add, or fix. I'll ask follow-ups for anything 
 - Why this improvement matters
 - Backward compatibility concerns
 - How to test success
+</step>
 
 ### Phase 2: Gap Analysis and Question Prioritization
 
+<step number="2" required="true">
 **Question Priority Tiers:**
 
 - **Tier 1 (Critical):** What aspect (DSP/Parameters/UI/Features), current state vs proposed change
@@ -395,10 +477,12 @@ Describe what you want to change, add, or fix. I'll ask follow-ups for anything 
 2. Check which tiers are covered
 3. Identify missing critical information
 4. Never ask about already-provided information
+</step>
 
 ### Phase 3: Question Batch Generation
 
-**Generate exactly 4 questions using AskUserQuestion based on identified gaps.**
+<step number="3" required="true">
+**MUST generate exactly 4 questions using AskUserQuestion based on identified gaps.**
 
 **Rules:**
 - If 4+ gaps exist: ask top 4 by tier priority
@@ -450,10 +534,17 @@ Question 4:
 1. Accumulate context with previous responses
 2. Re-analyze gaps
 3. Proceed to decision gate
+</step>
 
 ### Phase 3.5: Decision Gate
 
-**Use AskUserQuestion with 3 options after each question batch:**
+<decision_gate>
+<gate_name>finalize_or_continue</gate_name>
+<blocking>true</blocking>
+<checkpoint_protocol>true</checkpoint_protocol>
+
+<step number="4" required="true">
+**MUST use AskUserQuestion with 3 options after each question batch:**
 
 ```
 Question:
@@ -463,14 +554,20 @@ Question:
     - label: "Yes, finalize it", description: "Create improvement proposal"
     - label: "Ask me 4 more questions", description: "Continue refining"
     - label: "Let me add more context first", description: "Provide additional details"
+```
 
-Route based on answer:
+**MUST wait for user response. NEVER auto-proceed.**
+
+**Route based on answer:**
 - Option 1 → Proceed to Phase 4 (document creation)
 - Option 2 → Return to Phase 2 (re-analyze gaps, generate next 4 questions)
 - Option 3 → Collect free-form text, merge with context, return to Phase 2
-```
+</step>
+</decision_gate>
 
 ### Phase 4: Document Creation
+
+<step number="5" required="true">
 
 Create: `plugins/[PluginName]/.ideas/improvements/[feature-name].md`
 
@@ -513,10 +610,16 @@ Create: `plugins/[PluginName]/.ideas/improvements/[feature-name].md`
 
 [How to know the improvement is complete and working]
 ```
+</step>
 
 ### Phase 5: Session Handoff
 
-Create `.continue-here.md` in `plugins/[PluginName]/.ideas/`:
+<state_requirement>
+<requirement>must_create_continue_file</requirement>
+<step number="6" required="true">
+**MUST create handoff file for resuming later:**
+
+**File:** `plugins/[PluginName]/.ideas/.continue-here.md`
 
 ```markdown
 ---
@@ -555,8 +658,18 @@ Improvement proposal finalized for [PluginName]: [ImprovementName]
 **Files Created:**
 - plugins/[PluginName]/.ideas/improvements/[feature-name].md
 ```
+</step>
+</state_requirement>
 
 ### Phase 6: Decision Menu
+
+<decision_gate>
+<gate_name>next_action</gate_name>
+<blocking>true</blocking>
+<checkpoint_protocol>true</checkpoint_protocol>
+
+<step number="7" required="true">
+**MUST present next steps:**
 
 ```
 ✓ Improvement brief complete: [ImprovementName]
@@ -571,30 +684,43 @@ What's next?
 Choose (1-5): _
 ```
 
+<delegation_rules>
 **Handle responses:**
-- Option 1 → Invoke `plugin-improve` skill
-- Option 2 → Invoke `deep-research` skill (Phase 7 - stub)
+
+<delegation_rule skill="plugin-improve" trigger="option_1">
+- Condition: User chooses option 1
+- Action: MUST invoke plugin-improve skill via Skill tool
+</delegation_rule>
+
+<delegation_rule skill="deep-research" trigger="option_2">
+- Condition: User chooses option 2
+- Action: MUST invoke deep-research skill via Skill tool
+- Note: deep-research skill is fully implemented (Phase 7 complete)
+</delegation_rule>
+
 - Option 3 → Read relevant source files, then re-present menu
 - Option 4 → Confirm handoff file created, exit
 - Option 5 → Ask what they'd like to do
+</delegation_rules>
+</step>
+</decision_gate>
+
+</phases>
+</critical_sequence>
 
 ## Vagueness Detection Rules
 
-**Check for specificity:**
+<vagueness_check>
+**Specific request has:**
+- Named feature + Concrete action + Measurable criteria
 
-```
-Specific indicators:
-- Named feature ("resonance parameter", "bypass switch")
-- Concrete action ("add", "remove", "change from X to Y")
-- Measurable criteria ("range 0-1", "increase to 500px", "reduce by 3dB")
+**Vague request lacks:**
+- Named feature OR concrete action OR measurable criteria
 
-Vague indicators:
-- Generic improvements ("better", "improve", "enhance")
-- Unspecified targets ("the UI", "presets", "sound")
-- No success criteria mentioned
-```
-
-If 2+ vague indicators and 0 specific indicators → Present brainstorm vs implement choice.
+**Decision rule:**
+If 2+ vague indicators AND 0 specific indicators:
+→ MUST present choice: "Brainstorm approaches first" vs "Implement something reasonable"
+</vagueness_check>
 
 ## Grounded Feasibility
 
@@ -739,10 +865,12 @@ After creating documents:
 ```bash
 git add plugins/[PluginName]/.ideas/
 git add PLUGINS.md
-# Do NOT commit - user handles commits
+# NEVER commit - user handles commits
 ```
 
-**Stage files but don't commit.**
+**NEVER commit** - The user handles commits according to the checkpoint protocol.
+
+This skill only stages files. Commits are managed by the user or workflow orchestrator.
 
 ## Error Handling
 

@@ -134,128 +134,65 @@
 - `errors`: Any errors/failures (optional)
 - `options`: Custom options (optional)
 
-**Format - Inline Numbered List (NOT AskUserQuestion):**
+<decision_menu_format>
+  <display_format type="inline_numbered_list" forbidden_tool="AskUserQuestion">
+    Structure:
+    ```
+    ✓ [Completion statement]
 
-```
-✓ [Completion statement]
+    What's next?
+    1. [Primary action] (recommended)
+    2. [Secondary action]
+    3. [Discovery option] ← User discovers [feature]
+    4. [Alternative path]
+    5. [Escape hatch]
+    6. Other
 
-What's next?
-1. [Primary action] (recommended)
-2. [Secondary action]
-3. [Discovery feature] ← User discovers [capability]
-4. [Alternative path]
-5. [Escape hatch]
-6. Other
+    Choose (1-6): _
+    ```
+  </display_format>
 
-Choose (1-6): _
-```
+  <rendering_sequence enforce_order="true">
+    <step order="1">Load context-appropriate options from assets/decision-menus.json</step>
+    <step order="2">Format as inline numbered list (see format above)</step>
+    <step order="3">Display to user</step>
+    <step order="4" blocking="true">Wait for response (number, keyword, or "Other")</step>
+    <step order="5">Parse response and validate</step>
+    <step order="6">
+      IF valid: Execute chosen action
+      ELSE: Display error and re-present menu
+    </step>
+  </rendering_sequence>
 
-**Implementation:**
-1. Generate context-appropriate options (see generateContextualOptions below)
-2. Format as inline numbered list
-3. Display to user
-4. Wait for response (number, keyword shortcut, or "Other")
-5. Parse response
-6. Execute chosen action or re-present menu if invalid
+  <keyword_shortcuts>
+    - "continue" → Option 1 (primary action)
+    - "pause" → Pause option (creates checkpoint)
+    - "review" → Review option (show code/context)
+  </keyword_shortcuts>
 
-**Keyword Shortcuts:**
-- "continue" → Option 1 (primary action)
-- "pause" → Pause option (creates checkpoint)
-- "review" → Review option (show code/context)
+  <other_handling>
+    When user selects "Other":
+    1. Prompt: "What would you like to do?"
+    2. Accept free-form text
+    3. Process custom request
+    4. Re-present decision menu after completing request
+  </other_handling>
 
-**Handle "Other" responses:**
-```
-User: Other
-System: "What would you like to do?"
-User: [Free-form request]
-System: [Process request]
-System: [Re-present decision menu afterward]
-```
+  <progressive_disclosure>
+    Use discovery markers to surface hidden features:
+    - "Save as template ← Add to UI template library"
+    - "Design sync ← Validate brief matches mockup"
+    - "/research ← Deep investigation for complex problems"
+  </progressive_disclosure>
+</decision_menu_format>
 
 ### generateContextualOptions(context)
 
 **Purpose:** Generate situation-specific menu options after subagent completion.
 
-**After Stage 2 (Foundation):**
-```javascript
-[
-  { label: "Continue to Stage 3", recommended: true },
-  { label: "Review foundation code" },
-  { label: "Test build manually" },
-  { label: "Review CMakeLists.txt" },
-  { label: "Pause here" },
-  { label: "Other" }
-]
-```
+Load menu configurations from `assets/decision-menus.json` and customize based on context (stage number, success/failure, phase information).
 
-**After Stage 3 (Shell):**
-```javascript
-[
-  { label: "Continue to Stage 4", recommended: true },
-  { label: "Review APVTS implementation" },
-  { label: "Test parameter automation" },
-  { label: "Load in DAW to verify" },
-  { label: "Pause here" },
-  { label: "Other" }
-]
-```
-
-**After Stage 4 (DSP):**
-```javascript
-[
-  { label: "Continue to Stage 5", recommended: true },
-  { label: "Review DSP code" },
-  { label: "Test audio processing" },
-  { label: "Run pluginval" },
-  { label: "Pause here" },
-  { label: "Other" }
-]
-```
-
-**After Stage 5 (GUI):**
-```javascript
-[
-  { label: "Continue to Stage 6", recommended: true },
-  { label: "Review WebView integration" },
-  { label: "Test parameter bindings" },
-  { label: "Show standalone UI" },
-  { label: "Pause here" },
-  { label: "Other" }
-]
-```
-
-**After Stage 6 (Validation):**
-```javascript
-[
-  { label: "Install plugin to system folders", recommended: true },
-  { label: "Test in DAW first" },
-  { label: "Create another plugin" },
-  { label: "Review complete plugin code" },
-  { label: "Document this plugin" },
-  { label: "Other" }
-]
-```
-
-**Build Failure:**
-```javascript
-[
-  { label: "Investigate", discovery: "Run deep-research to find root cause" },
-  { label: "Show me the code" },
-  { label: "Show full build output" },
-  { label: "I'll fix it manually (say \"resume automation\" when ready)" },
-  { label: "Other" }
-]
-```
-
-**Validation Failure:**
-```javascript
-[
-  { label: "Fix and re-validate", recommended: true },
-  { label: "Re-run stage" },
-  { label: "Override (not recommended)" },
-  { label: "Other" }
-]
-```
+**Progressive disclosure:** Menu options include discovery markers (←) to surface features like deep-research, UI template library, design sync validation.
 
 ### formatDecisionMenu(completionStatement, options)
 
@@ -560,53 +497,80 @@ If user paused and says "resume automation" or chooses to continue:
 
 ---
 
-## Stage Boundary Protocol
+<stage_boundary_protocol>
+  <trigger>When subagent completes and returns to orchestrator</trigger>
 
-**At every stage completion (enforced by orchestrator):**
+  <sequence enforce_order="true">
+    <action order="1" actor="orchestrator">
+      Display completion statement:
+      "✓ Stage [N] complete: [description]"
+    </action>
 
-1. **Subagent returns** to orchestrator with completion status
+    <action order="2" actor="orchestrator" conditional="stages_4_5_6_only">
+      Run automated tests:
+      - Invoke plugin-testing skill
+      - IF tests fail: STOP, show results, present investigation menu
+      - IF tests pass: Continue to next action
+    </action>
 
-2. **Orchestrator shows completion statement:**
+    <action order="3" actor="orchestrator" required="true">
+      Auto-commit changes:
+      ```bash
+      git add plugins/[PluginName]/Source/
+      git add plugins/[PluginName]/.ideas/
+      git add plugins/[PluginName]/.continue-here.md
+      git add PLUGINS.md
+      git commit -m "feat: [Plugin] Stage [N] - [description]"
+      ```
+      IF commit fails: Warn user, continue anyway (non-blocking)
+    </action>
 
-```
-✓ Stage [N] complete: [description]
-```
+    <action order="4" actor="orchestrator" required="true">
+      Update .continue-here.md:
+      - stage: [new stage number]
+      - phase: [phase number if complex]
+      - last_updated: [timestamp]
+      - next_action: [which subagent to invoke next]
+      - next_phase: [phase number if phased implementation]
+    </action>
 
-3. **Orchestrator runs automated tests** (Stages 4, 5 only):
+    <action order="5" actor="orchestrator" required="true">
+      Update PLUGINS.md:
+      - Status: 🚧 Stage [N]
+      - Last Updated: [date]
+      - Lifecycle Timeline: Append new entry
+    </action>
 
-   - Invoke plugin-testing skill
-   - If fail: STOP, show results, wait for fixes
-   - If pass: Continue
+    <action order="6" actor="orchestrator" required="true" blocking="true">
+      Present decision menu with context-appropriate options
+    </action>
 
-4. **Orchestrator auto-commits:**
+    <action order="7" actor="orchestrator" required="true" blocking="true">
+      WAIT for user response - NEVER auto-proceed
+    </action>
+  </sequence>
 
-```bash
-git add [files]
-# Message format: feat: [Plugin] Stage [N] - [description]
-# For complex: feat: [Plugin] Stage [N.M] - [phase description]
-```
+  <responsibilities>
+    <actor name="subagent">
+      - Complete stage work
+      - Report completion status to orchestrator
+      - Return control to orchestrator for checkpoint
+      - NEVER commit changes
+    </actor>
 
-5. **Orchestrator updates `.continue-here.md`** with new stage, timestamp, context
+    <actor name="orchestrator">
+      - Commit changes
+      - Update state files (.continue-here.md, PLUGINS.md)
+      - Present decision menu
+      - Wait for user input
+      - Invoke next subagent based on user choice
+    </actor>
+  </responsibilities>
 
-6. **Orchestrator updates PLUGINS.md** with new status
-
-7. **Orchestrator presents decision menu** with context-appropriate options
-
-8. **Orchestrator waits for user response**
-
-**CRITICAL: Orchestrator NEVER auto-proceeds to next stage without user confirmation.**
-
-**Subagent responsibilities:**
-- Complete stage work
-- Report completion status to orchestrator
-- Return control to orchestrator for checkpoint
-
-**Orchestrator responsibilities:**
-- Commit changes
-- Update state files (.continue-here.md, PLUGINS.md)
-- Present decision menu
-- Wait for user input
-- Invoke next subagent based on user choice
+  <critical_invariant>
+    Orchestrator NEVER auto-proceeds to next stage without user confirmation.
+  </critical_invariant>
+</stage_boundary_protocol>
 
 ---
 

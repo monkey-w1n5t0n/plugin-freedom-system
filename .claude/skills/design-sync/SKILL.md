@@ -19,15 +19,7 @@ thinking-budget: 8000 # Moderate creative reasoning
 
 This skill compares the finalized UI mockup against the original creative brief to detect drift—where the implemented design diverges from the original vision. Catches misalignments before Stage 5 (GUI implementation) starts, preventing wasted work.
 
-**Why this matters:**
-
-Creative briefs capture intent. Mockups capture reality. During design iteration, these can diverge:
-
-- Brief says 8 parameters → Mockup has 12
-- Brief says "vintage warmth" → Mockup is "modern minimal"
-- Brief mentions preset browser → Mockup lacks it
-
-Detecting drift early allows course correction before implementation locks in the design.
+**Why this matters:** Creative briefs capture intent; mockups capture reality. During iteration these can diverge (parameter mismatches, visual style drift, missing features). Detecting drift early enables course correction before implementation.
 
 **Key innovation:** Dual validation (quantitative + semantic) with categorized drift levels and appropriate decision menus.
 
@@ -50,7 +42,12 @@ Detecting drift early allows course correction before implementation locks in th
 
 ## Workflow
 
+<critical_sequence>
+<sequence_name>design-sync-validation</sequence_name>
+<enforcement>MUST execute all 7 steps in order. MUST NOT skip any step. MUST NOT auto-proceed past decision gates. MUST NOT continue until user responds to gates.</enforcement>
+
 ### Step 1: Load Contracts
+<step_requirement>MUST complete before Step 2. If files missing, BLOCK with error menu.</step_requirement>
 
 Read three files:
 
@@ -78,24 +75,15 @@ Actions:
 ```
 
 ### Step 2: Quantitative Checks
+<step_requirement>MUST complete before Step 3. Extract counts first, then compare.</step_requirement>
 
-**Extract data from contracts:**
+**Extract parameter counts and feature lists from contracts using the patterns in `references/extraction-logic.md`:**
 
-```typescript
-// From creative-brief.md
-briefParamCount = extractParameterCount(brief); // Count mentioned parameters
-briefFeatures = extractFeatures(brief); // Grep for keywords
-
-// From parameter-spec.md
-mockupParamCount = countParameters(parameterSpec);
-
-// From mockup YAML
-mockupControls = countControls(mockupYAML); // All UI elements
-
-// Compare
-paramCountDelta = mockupParamCount - briefParamCount;
-missingFeatures = briefFeatures.filter((f) => !presentInMockup(f));
-```
+- Count parameters mentioned in creative-brief.md
+- Count parameters in parameter-spec.md
+- Count controls in mockup render-spec.yaml
+- Detect feature keywords (preset, bypass, meter, tabs, etc.)
+- Compare for mismatches
 
 **Parameter count thresholds:**
 
@@ -117,6 +105,7 @@ Keywords to search in brief:
 Check if mockup YAML contains corresponding components.
 
 ### Step 3: Semantic Validation (Extended Thinking)
+<step_requirement>MUST use extended thinking. MUST NOT skip semantic analysis.</step_requirement>
 
 **Use extended thinking to answer:**
 
@@ -138,7 +127,7 @@ Check if mockup YAML contains corresponding components.
    - Reductions justified? (simplification vs missing)
    - Core concept preserved?
 
-**Extended thinking prompt:**
+**MUST use this exact extended thinking prompt for semantic validation:**
 
 ```
 Compare creative brief with mockup to assess alignment:
@@ -164,7 +153,10 @@ Answer:
 Assess confidence: HIGH / MEDIUM / LOW
 ```
 
+**You MUST use extended thinking for Step 3. This is not optional. Budget: 8000 tokens.**
+
 ### Step 4: Categorize Drift
+<step_requirement>MUST categorize based on Step 2+3 findings before presenting.</step_requirement>
 
 Based on findings:
 
@@ -198,8 +190,14 @@ Based on findings:
 - Completely opposite visual style
 
 ### Step 5: Present Findings
+<step_requirement>MUST present appropriate decision menu based on drift category.</step_requirement>
 
 #### If No Drift:
+
+<decision_gate>
+<gate_name>no-drift-confirmation</gate_name>
+<blocking>true</blocking>
+<wait_for_user>REQUIRED - Present menu and WAIT. MUST NOT auto-select option 1 even though marked "(recommended)".</wait_for_user>
 
 ```
 ✓ Design-brief alignment verified
@@ -214,7 +212,14 @@ What's next?
 3. Other
 ```
 
+</decision_gate>
+
 #### If Acceptable Evolution:
+
+<decision_gate>
+<gate_name>acceptable-evolution-choice</gate_name>
+<blocking>true</blocking>
+<wait_for_user>REQUIRED - Present menu and WAIT. MUST NOT auto-proceed.</wait_for_user>
 
 ```
 ⚠️ Design evolution detected (acceptable)
@@ -239,7 +244,14 @@ What's next?
 4. Other
 ```
 
+</decision_gate>
+
 #### If Drift Requiring Attention:
+
+<decision_gate>
+<gate_name>drift-attention-choice</gate_name>
+<blocking>true</blocking>
+<wait_for_user>REQUIRED - Present menu and WAIT. MUST NOT auto-proceed.</wait_for_user>
 
 ```
 ⚠️ Design drift detected
@@ -266,7 +278,14 @@ What's next?
 5. Other
 ```
 
+</decision_gate>
+
 #### If Critical Drift:
+
+<decision_gate>
+<gate_name>critical-drift-blocked</gate_name>
+<blocking>true</blocking>
+<wait_for_user>REQUIRED - Present menu and WAIT. MUST NOT provide override option for critical drift.</wait_for_user>
 
 ```
 ❌ Critical design drift - Implementation BLOCKED
@@ -293,41 +312,16 @@ What's next?
 (Option to override not provided - critical drift must be resolved)
 ```
 
+</decision_gate>
+
 ### Step 6: Execute User Choice
+<step_requirement>MUST execute choice from Step 5 gate before proceeding to Step 7.</step_requirement>
 
 **Option 1: Update brief and continue**
 
-Add "Design Evolution" section to creative-brief.md:
+Use the template from `assets/evolution-template.md` to document the evolution:
 
-```markdown
-## Design Evolution
-
-### [Date] - UI Mockup v[N] Finalization
-
-**Changes from original vision:**
-
-**Parameters:**
-
-- Added: TONE, DRIVE, MIX, WIDTH (brief: 8 parameters, mockup: 12)
-
-**Features:**
-
-- Added: Visual feedback meter for delay time visualization
-
-**Visual Style:**
-
-- Refined: Gradient backgrounds for depth (brief: solid colors)
-- Refined: Animation polish on parameter changes
-
-**Rationale:**
-
-- Additional parameters (TONE, DRIVE, MIX, WIDTH) provide necessary tonal shaping
-  not anticipated in original brief.
-- Visual meter improves usability during performance by showing delay time graphically.
-- Gradient backgrounds enhance vintage aesthetic mentioned in brief.
-
-**User approval:** [Date] - Confirmed these changes align with plugin vision
-```
+[Insert populated evolution log entry into creative-brief.md]
 
 Update brief's "UI Vision" section to reflect current mockup (preserve original in "Evolution" section).
 
@@ -353,6 +347,13 @@ Update brief's "UI Vision" section to reflect current mockup (preserve original 
 - Warn: "Implementation may not match original vision"
 
 ### Step 7: Route Back to ui-mockup
+<step_requirement>MUST present ui-mockup Phase 5.5 decision menu after completing user's choice.</step_requirement>
+
+<handoff_protocol>
+<target_skill>ui-mockup</target_skill>
+<target_phase>5.5</target_phase>
+<handoff_type>return_to_workflow</handoff_type>
+<required_menu>Phase 5.5 decision menu (without "Check alignment" option)</required_menu>
 
 **After Step 6 actions complete (brief updated, mockup changed, or override logged), return to ui-mockup Phase 5.5 decision menu.**
 
@@ -386,6 +387,10 @@ Choose (1-6): _
 - Validates the design is aligned before generating implementation files
 - Prevents generating C++ boilerplate for misaligned mockups
 - Maintains checkpoint protocol (user decides next action after validation)
+
+</handoff_protocol>
+
+</critical_sequence>
 
 ---
 
@@ -453,9 +458,10 @@ Stage 1 generates plan.md based on parameter-spec.md. If parameter-spec doesn't 
 
 ---
 
-## Success Criteria
+<requirements>
+<section>Success Criteria</section>
 
-Validation is successful when:
+Validation is successful when ALL of these are met:
 
 - ✅ Both contracts loaded (brief + parameter-spec + mockup YAML)
 - ✅ Quantitative checks completed (parameter count, feature detection)
@@ -463,6 +469,9 @@ Validation is successful when:
 - ✅ Drift category assigned (none / acceptable / attention / critical)
 - ✅ Appropriate decision menu presented
 - ✅ User action executed (update brief / update mockup / override)
+
+MUST NOT mark validation complete until all requirements met.
+</requirements>
 
 ---
 
@@ -546,18 +555,21 @@ Enables audit trail: "Why did we proceed with drift?"
 
 ## Notes for Claude
 
-**When executing this skill:**
+**When executing design-sync, MUST follow these rules:**
 
-1. Always load all three contracts first (brief, parameter-spec, mockup YAML)
-2. Run quantitative checks before semantic validation (faster)
-3. Use extended thinking for semantic validation (8k budget)
-4. Categorize drift objectively (use thresholds from references/drift-detection.md)
-5. Present appropriate decision menu (based on drift category)
-6. Update brief's Evolution section if user approves evolution
-7. Log overrides to .validator-overrides.yaml
-8. Never auto-override (user must explicitly choose)
+1. ALWAYS load all three contracts first (brief, parameter-spec, mockup YAML)
+2. ALWAYS run quantitative checks before semantic validation (faster)
+3. MUST use extended thinking for semantic validation (8k budget) - not optional
+4. MUST categorize drift objectively (use thresholds from references/drift-detection.md)
+5. MUST present appropriate decision menu (based on drift category)
+6. After presenting decision menu, MUST WAIT for user response - NEVER auto-proceed
+7. If user approves evolution, update brief's Evolution section
+8. ALWAYS log overrides to .validator-overrides.yaml
+9. NEVER auto-override (user must explicitly choose)
+10. After user choice executed, MUST route back to ui-mockup Phase 5.5
 
-**Common pitfalls:**
+<anti-patterns>
+**Common pitfalls (AVOID THESE):**
 
 - Forgetting to use extended thinking for semantic validation (critical for accuracy)
 - Auto-categorizing as "acceptable" without checking (be objective)
@@ -565,6 +577,7 @@ Enables audit trail: "Why did we proceed with drift?"
 - Providing "override" for critical drift (should be blocked)
 - Updating mockup instead of brief (mockup is source of truth, brief gets updated)
 - Not logging overrides (audit trail required)
+</anti-patterns>
 
 ---
 
@@ -590,186 +603,11 @@ Enables audit trail: "Why did we proceed with drift?"
 
 ## Example Scenarios
 
-### Scenario 1: No Drift (Quick Validation)
-
-**Plugin:** SimpleGain
-**Brief:** 1 parameter (GAIN), minimal UI, slider only
-**Mockup:** 1 parameter (GAIN), single vertical slider, dark background
-
-**Quantitative:**
-
-- Parameter count: 1 (matches brief)
-- Features: None mentioned, none in mockup
-- Delta: 0
-
-**Semantic:**
-
-- Brief aesthetic: "Minimal, single slider"
-- Mockup aesthetic: Single vertical slider, dark theme
-- Alignment: HIGH confidence YES
-
-**Finding:** No drift
-
-**Output:**
-
-```
-✓ Design-brief alignment verified
-
-- Parameter count: 1 (matches brief: GAIN)
-- Features: None (as specified)
-- Visual style aligned: Minimal single-slider design
-
-What's next?
-1. Continue implementation (recommended) - Alignment confirmed
-2. Review details - See full comparison
-3. Other
-```
-
-**Time:** 2 minutes
-
-### Scenario 2: Acceptable Evolution
-
-**Plugin:** ReverbPlugin
-**Brief:** 3 parameters (SIZE, DAMPING, MIX), "Dark minimal theme"
-**Mockup:** 5 parameters (SIZE, DAMPING, PRE_DELAY, TONE, MIX), dark theme with gradient background
-
-**Quantitative:**
-
-- Parameter count: 5 (brief: 3) +2 parameters
-- Features: All mentioned present, no missing
-- Delta: +2
-
-**Semantic:**
-
-- Brief aesthetic: "Dark minimal theme"
-- Mockup aesthetic: Dark gradient background, clean layout
-- Added: PRE_DELAY (common reverb parameter), TONE (tonal shaping)
-- Alignment: HIGH confidence YES (evolution, not drift)
-
-**Finding:** Acceptable evolution
-
-**Output:**
-
-```
-⚠️ Design evolution detected (acceptable)
-
-**Changes from brief:**
-- Parameter count: 5 (brief: 3) +2 parameters
-  - Added: PRE_DELAY, TONE
-- Visual refinements: Gradient background (brief: solid dark)
-
-**Assessment:** Reasonable evolution
-
-**Reasoning:**
-PRE_DELAY and TONE are standard reverb parameters that enhance usability. Gradient
-background adds depth while preserving dark minimal aesthetic. Core concept intact.
-
-What's next?
-1. Update brief and continue (recommended) - Document evolution
-2. Review changes - See detailed comparison
-3. Revert to original - Simplify mockup to match brief
-4. Other
-```
-
-**Time:** 4 minutes
-
-### Scenario 3: Drift Requiring Attention
-
-**Plugin:** DelayPlugin
-**Brief:** 8 parameters including "TEMPO_SYNC" for tempo-synced delay, "Dark theme with blue accents"
-**Mockup:** 5 parameters (no TEMPO_SYNC), bright orange theme
-
-**Quantitative:**
-
-- Parameter count: 5 (brief: 8) -3 parameters
-- Missing features: TEMPO_SYNC (mentioned in brief)
-- Delta: -3 (scope reduction)
-
-**Semantic:**
-
-- Brief aesthetic: "Dark theme with blue accents"
-- Mockup aesthetic: Bright orange on white
-- Feature: Brief mentions tempo sync, mockup lacks it
-- Alignment: HIGH confidence NO (clear mismatch)
-
-**Finding:** Drift requiring attention
-
-**Output:**
-
-```
-⚠️ Design drift detected
-
-**Issues found:**
-1. Missing core feature: "TEMPO_SYNC" mentioned in brief (line 28)
-   - Brief: "Tempo-synced delay times locked to DAW BPM"
-   - Mockup: No tempo sync parameter or control
-2. Visual style mismatch:
-   - Brief: "Dark theme with blue accents"
-   - Mockup: Bright orange on white background
-3. Parameter count: 5 (brief: 8) -3 parameters (scope reduction)
-
-**Recommendation:** Address drift before implementation
-
-**Confidence:** HIGH (quantitative: -3 parameters, semantic: clear mismatch)
-
-What's next?
-1. Update mockup - Add TEMPO_SYNC, change to dark/blue theme
-2. Update brief - Remove tempo sync requirement, adjust aesthetic
-3. Continue anyway (override) - Accept drift, proceed with mockup
-4. Review detailed comparison
-5. Other
-```
-
-**Time:** 6 minutes
-
-### Scenario 4: Critical Drift (Blocked)
-
-**Plugin:** WavetableSynth
-**Brief:** 5 parameters (OSC_SHAPE, PITCH, FILTER_CUTOFF, RESONANCE, VOLUME), "Wavetable oscillator with filter"
-**Mockup:** 25 parameters including granular synthesis, effects chain, modulation matrix, "Complex modular synth"
-
-**Quantitative:**
-
-- Parameter count: 25 (brief: 5) +20 parameters (5x scope creep)
-- Features: Brief mentions wavetable + filter. Mockup adds granular, effects, modulation.
-- Delta: +20 (massive increase)
-
-**Semantic:**
-
-- Brief concept: "Simple wavetable synth with filter"
-- Mockup concept: "Complex modular synth with granular + effects"
-- Alignment: HIGH confidence NO (contradicts core concept)
-
-**Finding:** Critical drift (BLOCKING)
-
-**Output:**
-
-```
-❌ Critical design drift - Implementation BLOCKED
-
-**Critical issues:**
-1. Brief core concept: "Simple wavetable synth with filter (5 parameters)"
-   Mockup delivers: Complex modular synth (25 parameters) with granular synthesis,
-   effects chain, and modulation matrix
-2. Parameter count: 25 (brief: 5) - 5x scope creep
-3. Complexity: Brief = "Simple", Mockup = "Complex modular"
-
-**Why blocking:**
-Mockup fundamentally contradicts brief's core concept of simplicity. Implementation
-would deliver a completely different plugin than envisioned. High risk of rework.
-
-**Action required:** Resolve drift before implementation can proceed
-
-What's next?
-1. Update mockup - Return to simple wavetable + filter concept
-2. Update brief - Revise vision to match complex modular design
-3. Start over - Create new mockup aligned with brief
-4. Other
-
-(Continue anyway option not provided - critical drift must be resolved)
-```
-
-**Time:** 8 minutes (extended thinking for thorough analysis)
+See `references/examples.md` for four detailed validation scenarios:
+1. **No Drift (Quick Validation)** - Parameter match, visual alignment (~90 seconds)
+2. **Acceptable Evolution** - Minor additions, core concept intact (~3 minutes)
+3. **Drift Requiring Attention** - Missing features, style mismatch (~5 minutes)
+4. **Critical Drift (Blocked)** - Contradicts core concept, massive scope change (~10 minutes)
 
 ---
 

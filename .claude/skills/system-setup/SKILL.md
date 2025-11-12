@@ -1,6 +1,6 @@
 ---
 name: system-setup
-description: Validate and configure all dependencies required for Plugin Freedom System
+description: Validates and configures all dependencies required for the Plugin Freedom System. This is a STANDALONE skill that runs BEFORE plugin workflows begin. It checks for Python, build tools, CMake, JUCE, and pluginval, optionally installing missing dependencies with user approval. Configuration is saved to .claude/system-config.json for use by other skills.
 allowed-tools:
   - Bash # For dependency checks and installation
   - Read # For checking existing config
@@ -27,6 +27,19 @@ This skill ensures new users can get started without friction by:
 **Target platform:** macOS (extensible to Windows/Linux later)
 
 **User experience:** Interactive, with clear choices between automated and guided setup
+
+<delegation_rules>
+  <rule>This skill is STANDALONE - it does NOT delegate to other skills or subagents</rule>
+  <rule>All validation logic is handled by system-check.sh bash script</rule>
+  <rule>This skill is invoked BEFORE plugin workflows begin</rule>
+  <rule>DO NOT invoke plugin-workflow, plugin-planning, or any other plugin skills from here</rule>
+</delegation_rules>
+
+<cross_references>
+  <file>references/platform-requirements.md</file>
+  <file>references/juce-setup-guide.md</file>
+  <script>assets/system-check.sh</script>
+</cross_references>
 
 ---
 
@@ -99,6 +112,28 @@ When invoked via `/setup` command:
    ```
 
 2. **Store user choice and proceed to platform detection**
+
+<mode_definitions>
+After user selects mode, ALL subsequent dependency validations MUST respect this mode:
+
+MODE: "automated"
+  - Attempt installations with user confirmation
+  - Fall back to guided instructions if automation fails
+  - Present installation menus for missing dependencies
+  - Wait for user choice at each menu
+
+MODE: "guided"
+  - NEVER attempt automated installation
+  - Display manual instructions from references/
+  - Wait for user to complete manual steps
+  - Verify installation after user confirms completion
+
+MODE: "check-only"
+  - NEVER offer installation (automated or guided)
+  - Report each dependency status (found/missing/wrong-version)
+  - Continue through all dependencies regardless of failures
+  - Generate report at end showing what needs attention
+</mode_definitions>
 
 ---
 
@@ -527,6 +562,15 @@ Choose (1-5): _
 - Choice 4: Re-run system-setup skill
 - Choice 5: Exit with message
 
+<state_updates>
+After setup completes successfully:
+
+1. NO state file updates needed (system-setup is standalone)
+2. DO NOT update PLUGINS.md (no plugin created)
+3. DO NOT update .continue-here.md (not part of workflow)
+4. Configuration is stored in .claude/system-config.json only
+</state_updates>
+
 ---
 
 ## Error Handling
@@ -666,13 +710,28 @@ Setup is successful when:
 
 ## Notes for Claude
 
-**CRITICAL REQUIREMENTS:**
+<critical_requirements>
+  <requirement>Check before installing (NEVER install if exists)</requirement>
+  <requirement>Validate versions meet minimums (don't assume)</requirement>
+  <requirement>Test functionality (not just presence)</requirement>
+  <requirement>Get confirmation before automated installation</requirement>
+  <requirement>Provide fallback if automation fails</requirement>
+  <requirement>Use absolute paths (expand ~, validate existence)</requirement>
+  <requirement>Mode-specific behavior (respect user's choice)</requirement>
+  <requirement>Append test mode to all system-check.sh calls if TEST_MODE set</requirement>
+</critical_requirements>
 
-1. **ALWAYS check before installing** - Never install if dependency already exists
-2. **ALWAYS validate versions** - Don't assume found dependency meets minimum
-3. **ALWAYS test functionality** - Run version check to ensure executable works
-4. **ALWAYS get confirmation** - Present menu before any automated installation
-5. **ALWAYS provide fallback** - If automation fails, offer manual instructions
+<anti_patterns>
+  <anti_pattern>Installing without checking first</anti_pattern>
+  <anti_pattern>Not validating version requirements</anti_pattern>
+  <anti_pattern>Proceeding when critical dependencies missing</anti_pattern>
+  <anti_pattern>Using relative paths in config</anti_pattern>
+  <anti_pattern>Not testing executables actually run</anti_pattern>
+  <anti_pattern>Auto-proceeding without user confirmation</anti_pattern>
+  <anti_pattern>Using AskUserQuestion tool instead of inline menus</anti_pattern>
+  <anti_pattern>Forgetting to append test mode to system-check.sh calls</anti_pattern>
+  <anti_pattern>Not respecting MODE throughout execution</anti_pattern>
+</anti_patterns>
 
 **Automated vs Guided Mode:**
 
@@ -703,3 +762,16 @@ Setup is successful when:
 - Not testing if executables actually run
 - Auto-proceeding without user confirmation
 - Using AskUserQuestion instead of inline menus
+
+<completion_criteria>
+This skill is complete when:
+
+1. ✓ Platform detected and confirmed by user
+2. ✓ All 5 dependencies validated (or user explicitly skipped)
+3. ✓ Configuration saved to .claude/system-config.json
+4. ✓ Configuration file added to .gitignore
+5. ✓ Final system report displayed
+6. ✓ User selected action from final menu (exit, start new plugin, resume existing)
+
+DO NOT auto-proceed to next action after final menu - user decides what's next.
+</completion_criteria>

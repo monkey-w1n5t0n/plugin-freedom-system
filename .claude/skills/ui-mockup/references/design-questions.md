@@ -95,3 +95,112 @@ You mentioned [VU meter / analyzer / waveform]. What should it display exactly?
 - **Modulation indicators**: LFO/envelope routing
 
 **Implementation note:** Some special elements may need C++ rendering (OpenGL). For Phase 1, design them in HTML/CSS with the understanding they may need Stage 5 (GUI) implementation.
+
+## Example Question Batches
+
+### Example 1: Three-knob reverb with minimal brief
+
+**Context gaps identified:**
+- Layout structure (not specified)
+- Knob visual style (not specified)
+- Background treatment (color mentioned but not layout)
+
+**Generated question batch:**
+
+```yaml
+Question 1:
+  question: "Layout structure for the three knobs?"
+  header: "Layout"
+  options:
+    - label: "Horizontal row of knobs"
+      description: "Classic single-row layout"
+    - label: "Vertical stack"
+      description: "Narrow, tall layout"
+    - label: "Triangle arrangement"
+      description: "Two bottom, one top"
+    - label: "Other"
+      description: "Custom arrangement"
+
+Question 2:
+  question: "Knob visual style preference?"
+  header: "Knob Style"
+  options:
+    - label: "Realistic 3D knobs"
+      description: "Skeuomorphic hardware look"
+    - label: "Flat minimal knobs"
+      description: "Modern, clean circles"
+    - label: "Vintage radio knobs"
+      description: "Textured, aged appearance"
+    - label: "Other"
+      description: "Custom design"
+
+Question 3:
+  question: "Background visual treatment?"
+  header: "Background"
+  options:
+    - label: "Solid color with subtle gradient"
+      description: "Clean, professional"
+    - label: "Textured surface (metal, wood)"
+      description: "Hardware-inspired"
+    - label: "Geometric patterns"
+      description: "Modern, abstract"
+    - label: "Other"
+      description: "Custom design"
+
+Question 4:
+  question: "Additional UI elements needed?"
+  header: "Extras"
+  options:
+    - label: "Plugin name/logo only"
+      description: "Minimal chrome"
+    - label: "Preset browser"
+      description: "Dropdown or menu"
+    - label: "Visual feedback (meters, waveforms)"
+      description: "Dynamic display"
+    - label: "Other"
+      description: "Custom elements"
+```
+
+**Tier classification:**
+- Question 1 (Layout): Tier 1 - Critical gap
+- Question 2 (Knob style): Tier 2 - Visual gap
+- Question 3 (Background): Tier 2 - Visual gap
+- Question 4 (Extras): Tier 3 - Polish gap
+
+### Example 2: Complex multi-effect with detailed brief
+
+**Context gaps identified:**
+- Tab navigation style (brief mentions "tabbed interface" but no visual style)
+- Module layout within tabs (not specified)
+
+**Generated question batch:**
+
+```yaml
+Question 1:
+  question: "Tab navigation visual style?"
+  header: "Tab Style"
+  options:
+    - label: "Top horizontal tabs"
+      description: "Classic web-style tabs"
+    - label: "Side vertical tabs"
+      description: "Narrow vertical strip"
+    - label: "Icon-based tab bar"
+      description: "Minimal, icon-only"
+    - label: "Other"
+      description: "Custom navigation"
+
+Question 2:
+  question: "Module layout within each tab?"
+  header: "Module Layout"
+  options:
+    - label: "Grid arrangement"
+      description: "Organized rows/columns"
+    - label: "Free-form positioning"
+      description: "Custom placement"
+    - label: "Single-column flow"
+      description: "Vertical stacking"
+    - label: "Other"
+      description: "Custom layout"
+```
+
+**Note:** Fewer questions needed when brief is detailed. Focus on genuinely ambiguous aspects.

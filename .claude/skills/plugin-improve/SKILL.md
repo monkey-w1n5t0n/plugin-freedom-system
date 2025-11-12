@@ -1,6 +1,6 @@
 ---
 name: plugin-improve
-description: Fix bugs and add features with versioning, regression testing, and backups
+description: Fix bugs, add features to completed plugins. Includes versioning, backups, regression testing, changelog automation. Trigger terms - improve, fix, add feature, modify plugin, version bump, rollback
 allowed-tools:
   - Read
   - Write
@@ -18,20 +18,19 @@ preconditions:
 
 **Integration with deep-research:**
 
-This skill can receive pre-computed research findings from the deep-research skill. When user runs `/research` to investigate a problem and then chooses "Apply solution", deep-research outputs a directive that the main conversation (orchestrator) recognizes and acts on by invoking this skill. Phase 0.45 detects the research findings in conversation history and skips investigation, proceeding directly to implementation approval.
+<handoff_protocol>
+**Trigger:** deep-research outputs "Invoke plugin-improve skill"
+**Detection:** Phase 0.45 scans conversation history
+**Action:** Extract research findings, skip investigation (Phase 0.5)
+**Benefits:** Preserve expensive research context (Opus + extended thinking)
+</handoff_protocol>
 
-**Workflow:**
-1. User: `/research [problem]` → deep-research investigates
-2. deep-research: Presents findings with "Apply solution" option
-3. User: Selects "Apply solution"
-4. deep-research: Outputs directive: "Next step: Invoke plugin-improve skill."
-5. Main conversation (orchestrator): Sees directive, uses Skill tool to invoke plugin-improve
-6. plugin-improve: Detects research in history (Phase 0.45), extracts findings, skips investigation
-7. plugin-improve: Implements with versioning, backups, testing
+See `references/handoff-protocols.md` for complete workflow and detection mechanism.
 
-**Note:** This is the standard handoff protocol. When the orchestrator sees "Invoke plugin-improve skill" in deep-research output, it will automatically invoke this skill. The routing is explicit and always executed.
-
+<gate_preconditions enforcement="strict">
 ## Precondition Checking
+
+**MUST execute before any other phase. BLOCK if conditions not met.**
 
 **Before starting, verify:**
 
@@ -59,6 +58,8 @@ grep "^### $PLUGIN_NAME$" PLUGINS.md
      Plugin [PluginName] not found in PLUGINS.md.
      ```
 
+</gate_preconditions>
+
 ## Phase 0: Specificity Detection
 
 **Check if request is specific:**
@@ -79,97 +80,110 @@ Request IS vague if lacking above:
 **Assess specificity:**
 
 - **Specific enough (1-2 clarification questions max):** Proceed to Phase 0.3 (4-question clarification batch)
-- **Vague:** Present choice using AskUserQuestion:
+- **Vague:** Present inline decision menu:
 
 ```
-Question:
-  question: "Your request needs more detail. How should I proceed?"
-  header: "Approach"
-  options:
-    - label: "Brainstorm approaches together", description: "I'll ask questions to explore options"
-    - label: "Implement something reasonable", description: "I'll investigate and propose a solution"
+Your request needs more detail. How should I proceed?
 
-Handle responses:
-- Option 1 → Invoke plugin-ideation skill in improvement mode, then return here when ready
+1. Brainstorm approaches together - I'll ask questions to explore options
+2. Implement something reasonable - I'll investigate and propose a solution
+3. Other
+
+Choose (1-3): _
+```
+
+**Handle responses:**
+- Option 1 → Invoke plugin-ideation skill in improvement mode
 - Option 2 → Proceed to Phase 0.45 (Research Detection)
+- Option 3 → Collect free-form text, reassess
+
+## Phase 0.3: Clarification Questions (If Specific)
+
+**If request is specific enough, ask targeted questions using inline menus:**
+
+**Question 1 - What to change:**
+```
+What needs to change?
+
+1. Fix a bug - Something is broken or behaving incorrectly
+2. Add a feature - New capability or enhancement
+3. Improve existing behavior - Refine how something works
+4. Other
+
+Choose (1-4): _
 ```
 
-## Phase 0.3: Clarification Questions (For Specific Requests)
-
-**If request is specific enough, ask 4 clarification questions using AskUserQuestion:**
-
-**Question Priority Tiers:**
-
-- **Tier 1 (Critical):** Current behavior, proposed solution, breaking changes
-- **Tier 2 (Implementation):** Testing approach, backward compatibility, version impact
-- **Tier 3 (Context):** Rationale, success metrics, alternative approaches
-
-**Generate exactly 4 questions based on what's missing:**
-
+**Question 2 - Scope:**
 ```
-Question 1:
-  question: "Current behavior that needs changing?"
-  header: "Problem"
-  options:
-    - label: "Describe the issue", description: "Explain what's wrong or limited"
-    - label: "Show example", description: "Provide specific example"
-    - label: "Already described", description: "Skip this question"
-    - label: "Other", description: "Different approach"
+How extensive is this change?
 
-Question 2:
-  question: "Proposed solution?"
-  header: "Fix"
-  options:
-    - label: "Add new feature", description: "Extend functionality"
-    - label: "Modify existing", description: "Change current behavior"
-    - label: "Remove/replace", description: "Take something out"
-    - label: "Other", description: "Different solution"
+1. Single function/method - Localized change in one place
+2. Multiple related components - Changes across a few files
+3. System-wide change - Affects architecture or many components
+4. Other
 
-Question 3:
-  question: "Testing approach?"
-  header: "Verification"
-  options:
-    - label: "Load test session", description: "Use existing project"
-    - label: "A/B compare", description: "Before/after comparison"
-    - label: "Measure performance", description: "CPU/memory metrics"
-    - label: "Other", description: "Different testing method"
-
-Question 4:
-  question: "Breaking changes acceptable?"
-  header: "Compatibility"
-  options:
-    - label: "Yes", description: "Can break existing presets/sessions"
-    - label: "Must maintain compatibility", description: "No breaking changes"
-    - label: "Only if worth it", description: "Evaluate trade-offs"
-    - label: "Other", description: "Different constraint"
+Choose (1-4): _
 ```
 
-**After receiving answers:**
-
-1. Merge with initial request
-2. Proceed to decision gate
-
-## Phase 0.4: Decision Gate (For Specific Requests)
-
-**Use AskUserQuestion with 3 options after clarification questions:**
-
+**Question 3 - Priority:**
 ```
-Question:
-  question: "Ready to implement this improvement?"
-  header: "Next step"
-  options:
-    - label: "Yes, implement it", description: "Proceed with implementation"
-    - label: "Ask me 4 more questions", description: "Need more clarification"
-    - label: "Let me add more context first", description: "Provide additional details"
+Version bump priority?
 
-Route based on answer:
-- Option 1 → Proceed to Phase 0.45 (Research Detection)
-- Option 2 → Return to Phase 0.3 (re-analyze gaps, generate next 4 questions)
-- Option 3 → Collect free-form text, merge with context, return to Phase 0.3
+1. PATCH (bug fix) - Backward compatible fix, increment 0.0.X
+2. MINOR (feature) - New feature, backward compatible, increment 0.X.0
+3. MAJOR (breaking) - Breaking change, incompatible API, increment X.0.0
+4. Other
+
+Choose (1-4): _
 ```
 
+**Question 4 - Testing:**
+```
+Should I run regression tests?
+
+1. Yes, full regression suite - Compare new behavior vs baseline backup
+2. Yes, but manual review if failures - Show me what changed and let me decide
+3. No, skip regression tests - Just build and verify compilation
+4. Other
+
+Choose (1-4): _
+```
+
+**Collect all responses before proceeding to Phase 0.4**
+
+## Phase 0.4: Decision Gate
+
+**Show user what you understand, ask for confirmation:**
+
+```
+I understand you want to:
+- [Summary of change from Question 1]
+- Scope: [Answer from Question 2]
+- Version bump: [Answer from Question 3]
+- Regression testing: [Answer from Question 4]
+
+Is this correct?
+
+1. Yes, proceed - Continue to Phase 0.45 (Research Detection)
+2. No, refine - Ask me follow-up questions
+3. No, cancel - Stop the workflow
+4. Other
+
+Choose (1-4): _
+```
+
+**Handle responses:**
+- Option 1 → Proceed to Phase 0.45
+- Option 2 → Return to Phase 0.3, ask follow-up questions
+- Option 3 → Stop workflow, wait for new instruction
+- Option 4 → Collect free-form text, reassess
+
+<handoff_protocol source="deep-research" target="plugin-improve">
 ## Phase 0.45: Research Detection
 
+**PROTOCOL:** Check for pre-computed research before starting investigation
+
+<detection_signals>
 **BEFORE starting investigation, check conversation history for deep-research findings:**
 
 **Scan recent messages for:**
@@ -209,15 +223,35 @@ Proceed to Phase 0.5 (Investigation) - perform fresh root cause analysis.
 - Maintains separation: research finds solutions, improve implements them
 - Clear handoff: research outputs directive → orchestrator invokes improve (always executed)
 
+</detection_signals>
+
+</handoff_protocol>
+
 ## Phase 0.5: Investigation (3-Tier)
 
 **Purpose:** Find root causes, prevent band-aid fixes
 
-**Tier Selection:**
+**Tier Selection Decision Tree:**
 
-- **Tier 1 (5-10 min):** Cosmetic changes, simple fixes, obvious issues
-- **Tier 2 (15-30 min):** Logic errors, parameter issues, integration bugs
-- **Tier 3 (30-60 min):** Complex bugs, performance issues, architectural problems
+```
+Request analysis:
+├─ Known pattern match? → Tier 1
+├─ Single component issue? → Tier 2
+├─ Multi-component / Performance / Architecture? → Tier 3
+└─ Unclear? → Start Tier 1, escalate if needed
+```
+
+**Tier 1 (5-10 min):** File read + pattern match
+- Cosmetic changes, simple fixes, obvious issues
+- Known patterns from troubleshooting/
+
+**Tier 2 (15-30 min):** Logic trace + integration check
+- Logic errors, parameter issues, integration bugs
+- Single component, requires code analysis
+
+**Tier 3 (30-60 min):** Invoke deep-research skill (uses Opus)
+- Complex bugs, performance issues, architectural problems
+- Multi-component, requires deep investigation
 
 **Tier 1: Basic Code Inspection**
 
@@ -294,7 +328,12 @@ Proceed with recommended approach? (y/n): \_
 
 If user says no, ask which alternative or if they want different approach.
 
+<critical_sequence phase="backup-verification" enforcement="strict">
 ## Phase 0.9: Backup Verification
+
+**CRITICAL INVARIANT:** Phase 1 MUST NOT execute until backup verified.
+**ENFORCEMENT:** Block execution, halt workflow if backup fails.
+**VIOLATION CONSEQUENCE:** Data loss, no rollback path.
 
 **Goal:** Ensure rollback is possible if improvement fails
 
@@ -308,12 +347,12 @@ if [[ ! -d "$BACKUP_PATH" ]]; then
 fi
 ```
 
-**Create backup if missing:**
+**Create backup if missing using template:**
 
 ```bash
+# See assets/backup-template.sh for complete script
 mkdir -p "backups/${PLUGIN_NAME}/v${CURRENT_VERSION}/"
 cp -r "plugins/${PLUGIN_NAME}/" "backups/${PLUGIN_NAME}/v${CURRENT_VERSION}/"
-echo "✓ Backup created: backups/${PLUGIN_NAME}/v${CURRENT_VERSION}/"
 ```
 
 **Verify backup integrity:**
@@ -335,7 +374,12 @@ echo "✓ Backup created: backups/${PLUGIN_NAME}/v${CURRENT_VERSION}/"
 Rollback available if needed.
 ```
 
+</critical_sequence>
+
+<phase id="1" name="pre-implementation" dependencies="backup-verification">
 ## Phase 1: Pre-Implementation Checks
+
+**DEPENDENCY:** MUST NOT execute until Phase 0.9 (Backup Verification) completes.
 
 **Load current state:**
 
@@ -385,9 +429,16 @@ Are you sure? This should be rare. (y/n): _
 
 Calculate new version based on selection.
 
-## Phase 2: Backup Creation
+</phase>
 
-**Before ANY code changes:**
+<critical_sequence phase="backup-creation" enforcement="strict">
+## Phase 2: Create Backup
+
+**CRITICAL INVARIANT:** Code changes (Phase 3) MUST NOT execute until backup created.
+**ENFORCEMENT:** Block execution, halt workflow if backup creation fails.
+**VIOLATION CONSEQUENCE:** No recovery if Phase 3 fails.
+
+**CRITICAL: Must complete before any code changes**
 
 ```bash
 mkdir -p backups/
@@ -402,9 +453,15 @@ Confirm backup created:
 This backup can be restored if anything goes wrong.
 ```
 
+</critical_sequence>
+
+<phase id="3" name="implementation" dependencies="backup-creation">
 ## Phase 3: Implementation
 
-**Make the approved changes:**
+**DEPENDENCY:** MUST NOT execute until Phase 2 (Backup Creation) completes.
+**SAFETY:** If implementation fails, rollback path guaranteed by Phase 2 backup.
+
+**Execute the change:**
 
 1. Modify source files according to investigation findings
 2. Update build configuration if needed (CMakeLists.txt)
@@ -420,130 +477,32 @@ This backup can be restored if anything goes wrong.
 
 **Log changes as you go for CHANGELOG.**
 
+</phase>
+
 ## Phase 4: Enhanced CHANGELOG Update
 
 **Update CHANGELOG.md with enhanced format:**
 
-Add new version entry at top with technical details:
+See `references/changelog-format.md` for complete template structure and section usage guide.
 
-```markdown
-# Changelog
+**Quick reference:**
+- **PATCH (0.0.X):** Use "Fixed" section primarily
+- **MINOR (0.X.0):** Use "Added"/"Changed" sections
+- **MAJOR (X.0.0):** Include "Breaking Changes" and "Migration Notes" sections
 
-All notable changes to [PluginName] will be documented in this file.
+**Always include:**
+- Date in ISO format (YYYY-MM-DD)
+- Technical details (root cause, solution, affected components)
+- User impact (what changes in behavior)
+- Testing notes (regression test results if available)
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+<delegation_rule target="build-automation" required="true">
+## Phase 5: Build and Test
 
-## [X.Y.Z] - [YYYY-MM-DD]
+**DELEGATION:** MUST invoke build-automation skill for all build operations.
+**REASON:** Centralized build logic, 7-phase pipeline with verification.
 
-### Added
-
-- [New feature 1]
-  - [Detailed description]
-  - [User benefit]
-
-### Changed
-
-- [Modified behavior 1]
-
-### Fixed
-
-- [Bug fix 1]
-  - Root cause: [Technical explanation]
-  - Impact: [What was affected]
-
-### Technical
-
-- Parameter changes:
-  - Added: [PARAM_ID] (ID: "paramId", range: [min,max], default: value)
-  - Modified: [PARAM_ID] (changed range from X to Y)
-  - Removed: [PARAM_ID] (deprecated, use [NEW_PARAM] instead)
-- DSP changes:
-  - [Description of processBlock modifications]
-  - [Algorithm improvements]
-- UI changes:
-  - [WebView or native UI updates]
-  - [Layout modifications]
-- Dependencies:
-  - [New JUCE modules added]
-  - [External dependencies]
-
-### Testing
-
-- Regression tests: [✅ X/Y passing | ⚠️ See notes below]
-- Baseline version: v[X.Y.Z]
-- New test coverage: [Description of new tests if added]
-
-### Migration Notes (MAJOR versions only)
-
-- v[X-1].x presets compatible: [Yes/No + explanation]
-- Breaking changes:
-  - [List parameter ID changes]
-  - [List removed parameters]
-  - [State format changes]
-- Workarounds:
-  - [How to adapt existing projects]
-  - [Preset conversion steps if needed]
-
-## [Previous Version] - [Date]
-
-[Previous entries remain...]
-```
-
-**Sections to use:**
-
-- **Added:** New features (with detailed descriptions)
-- **Changed:** Changes to existing functionality
-- **Fixed:** Bug fixes (with root cause explanations)
-- **Removed:** Removed features
-- **Technical:** Implementation details (parameters, DSP, UI, dependencies)
-- **Testing:** Regression test results and coverage
-- **Migration Notes:** Breaking changes and workarounds (MAJOR versions only)
-
-**Change type auto-detection:**
-
-- PATCH (v1.0.0 → v1.0.1): Use "Fixed" section primarily
-- MINOR (v1.0.0 → v1.1.0): Use "Added" or "Changed" sections
-- MAJOR (v1.0.0 → v2.0.0): Include "Migration Notes" section
-
-**Enhanced changelog example:**
-
-```markdown
-## [1.1.0] - 2025-11-10
-
-### Added
-
-- Tempo sync parameter (TEMPO_SYNC)
-  - Locks delay time to DAW tempo
-  - Supports 1/16 to 4 bars
-  - Automatic BPM detection via AudioPlayHead
-
-### Changed
-
-- Improved feedback algorithm for warmer saturation
-
-### Technical
-
-- Added parameter: TEMPO_SYNC (ID: "tempoSync", range: [0,1], default: 0)
-- Added juce::AudioPlayHead integration in processBlock
-- New WebView relay: tempoSyncRelay
-- Modified DSP: DelayLine now supports tempo-locked timing
-
-### Testing
-
-- Regression tests: ✅ 5/5 passing (baseline: v1.0.0)
-- Added test: Tempo sync accuracy (±1ms)
-
-### Migration Notes
-
-- v1.0 presets fully compatible (TEMPO_SYNC defaults to false, preserves behavior)
-- No breaking changes
-```
-
-## Phase 5: Build & Test
-
-**1. Build plugin:**
-
-Invoke `build-automation` skill (full build with installation):
+**Delegate to build-automation skill:**
 
 ```
 Invoking build-automation skill to build and install updated plugin...
@@ -594,7 +553,13 @@ Choose (1-4): _
 
 If tests fail, present investigation options.
 
+</delegation_rule>
+
+<validation_gate gate="regression-tests" required="conditional">
 ## Phase 5.5: Regression Testing
+
+**GATE CONDITION:** If plugin-testing skill exists AND baseline backup available
+**GATE FAILURE:** Present rollback options, require user decision
 
 **Check:** Does `.claude/skills/plugin-testing/SKILL.md` exist?
 
@@ -628,74 +593,19 @@ cd backups/[Plugin]/v[baseline]/
 - Invoke plugin-testing skill on new build
 - Capture results: CURRENT_RESULTS
 
-**5. Compare results:**
+**If plugin-testing skill exists and baseline backup available:**
 
-```typescript
-interface RegressionReport {
-  baseline_version: string;
-  current_version: string;
-  tests_run: number;
-  baseline_passing: number;
-  current_passing: number;
-  new_failures: TestCase[]; // Regressions!
-  new_passes: TestCase[]; // Fixed bugs
-  unchanged: number;
-}
-```
+See `references/regression-testing.md` for complete RegressionReport interface and protocol.
 
-**6. Present findings:**
+**Quick summary:**
+1. Invoke plugin-testing skill with baseline and new versions
+2. Collect RegressionReport (build, load, parameter, audio tests)
+3. Analyze failures: critical → rollback, warnings → review, pass → deploy
+4. Present results with decision menu
 
-#### If No Regressions:
+**If regression tests fail, present rollback options before proceeding.**
 
-```
-✓ Regression tests passed (5/5 tests, no new failures)
-
-What's next?
-1. Continue to git workflow (recommended)
-2. Review test details
-3. Other
-```
-
-#### If Regressions Detected:
-
-```
-⚠️ Regression detected - new failures found
-
-**Baseline (v1.0.0):** 5/5 tests passing
-**Current (v1.1.0):** 3/5 tests passing
-
-**New failures:**
-1. Parameter Response Test - GAIN parameter no longer affects audio
-2. CPU Performance Test - Real-time factor increased from 0.05 to 0.15
-
-**Recommendation:** Fix regressions before proceeding
-
-What's next?
-1. Investigate failures - Debug issues (recommended)
-2. View test output - See detailed logs
-3. Continue anyway - Accept regressions (not recommended)
-4. Rollback changes - Revert to v1.0.0
-5. Other
-```
-
-### Rollback Mechanism
-
-If user chooses "Rollback changes":
-
-1. Verify backup exists: `backups/[Plugin]/v[baseline]/`
-2. Copy all files from backup to `plugins/[Plugin]/`
-3. Rebuild and reinstall
-4. Update PLUGINS.md status
-5. Git reset if commits were made
-6. Confirm rollback success
-
-```bash
-# Rollback script
-rm -rf plugins/[Plugin]
-cp -r backups/[Plugin]/v[baseline]/ plugins/[Plugin]/
-cd plugins/[Plugin]
-../../scripts/build-and-install.sh
-```
+</validation_gate>
 
 ## Phase 6: Git Workflow
 
@@ -735,23 +645,15 @@ Git commit message:
 You can commit these changes when ready.
 ```
 
-## Phase 7: Installation
+<delegation_rule target="plugin-lifecycle" required="false">
+## Phase 7: Installation (Optional)
 
-**Present decision:**
+**DELEGATION:** If user requested installation, invoke plugin-lifecycle skill.
+**REASON:** Centralized installation logic with cache clearing and verification.
 
-```
-Build and tests successful. Install to system folders?
+**If user requested installation:**
 
-1. Yes, install now (recommended for 📦 Installed plugins)
-2. No, test from build folder first
-3. Skip installation
-
-Choose (1-3): _
-```
-
-**If user chooses 1:**
-
-Invoke `plugin-lifecycle` skill (Phase 1b Task 9):
+Invoke `plugin-lifecycle` skill:
 
 ```
 Installing [PluginName] v[X.Y.Z]...
@@ -768,9 +670,14 @@ Update version number:
 
 If status was ✅ Working and now installed, change to 📦 Installed.
 
+</delegation_rule>
+
+<checkpoint_protocol>
 ## Phase 8: Completion
 
-**Present decision menu:**
+**MUST present numbered decision menu using inline format (NOT AskUserQuestion tool)**
+
+**Present numbered decision menu (inline format):**
 
 ```
 ✓ [PluginName] v[X.Y.Z] complete
@@ -793,33 +700,22 @@ Choose (1-5): _
 - Option 4 → Suggest creating documentation
 - Option 5 → Ask what they'd like to do
 
+</checkpoint_protocol>
+
 ## Breaking Change Detection
 
-**Automatically detect breaking changes:**
+**Check for breaking changes:**
 
-If implementation modifies:
+See `references/breaking-changes.md` for complete detection criteria.
 
-- Parameter IDs
-- Parameter count (removed parameters)
-- State format (APVTS structure)
-- Audio routing (channel count)
+**Quick check:**
+- Parameter IDs changed? → Breaking
+- Parameter ranges changed? → Breaking
+- State format changed? → Breaking
+- Features removed? → Breaking
+- API signatures changed? → Breaking
 
-Warn:
-
-```
-⚠️ Breaking change detected
-
-This change will cause:
-- Existing presets may not load correctly
-- Session automation may break
-- Users need to recreate presets
-
-This requires a MAJOR version bump (v[X].0.0).
-
-Proceed with breaking change? (y/n): _
-```
-
-If user confirms, force MAJOR version bump.
+If breaking changes detected, warn user and require MAJOR version bump.
 
 ## Rollback Support
 
@@ -844,52 +740,27 @@ Backup location: backups/[PluginName]-v[X.Y.Z]-[timestamp]
 
 ## Version Bump Logic
 
-**PATCH (v1.2.3 → v1.2.4):**
+**Determine version bump using decision tree:**
 
-- Bug fixes
-- Performance improvements
-- Cosmetic UI changes
-- Documentation updates
-- No new features
-- No breaking changes
+See `references/versioning.md` for complete versioning logic.
 
-**MINOR (v1.2 → v1.3):**
+**Quick reference:**
+- Breaking change detected? → MAJOR (X.0.0)
+- New feature added? → MINOR (0.X.0)
+- Bug fix only? → PATCH (0.0.X)
 
-- New features added
-- New parameters added
-- UI enhancements
-- Backward compatible
-- Existing presets still work
+If unsure, prefer MINOR over MAJOR (conservative approach).
 
-**MAJOR (v1 → v2):**
+## Version History
 
-- Breaking changes
-- Parameter IDs changed
-- Parameters removed
-- State format changed
-- Requires preset migration
-- Should be rare
+**Phase 7 enhancements (2025-11):**
+- Regression testing integration (Phase 5.5)
+- Enhanced changelog format (Phase 4)
+- Backup verification protocol (Phase 0.9)
+- One-command rollback mechanism
+- Breaking change detection
 
-## Phase 7 Enhancements
-
-This skill has been enhanced in Phase 7 with:
-
-- **Regression testing** (Phase 5.5): Automatically detects breaking changes by comparing baseline version tests to current version
-- **Enhanced changelogs** (Phase 4): Technical details section includes parameter changes, DSP modifications, UI updates, dependencies. Migration notes for MAJOR versions.
-- **Backup verification** (Phase 0.9): Ensures rollback is possible before making any changes. Uses `verify-backup.sh` script.
-- **Rollback mechanism**: One-command restore to previous version if regressions detected
-
-**Benefits:**
-
-- Catch breaking changes automatically before deployment
-- Document technical implementation details for future reference
-- Safe iteration (always have verified backup)
-- Quick rollback if improvement introduces problems
-
-**See:**
-
-- `architecture/17-testing-strategy.md` - Regression test specifications
-- `scripts/verify-backup.sh` - Backup integrity verification script
+**See:** `architecture/17-testing-strategy.md`, `scripts/verify-backup.sh`, `references/regression-testing.md`
 
 ## Integration Points
 

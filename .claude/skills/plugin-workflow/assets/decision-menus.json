@@ -1,0 +1,78 @@
+{
+  "stage_2_complete": {
+    "completion_statement": "Foundation compiles successfully",
+    "options": [
+      { "label": "Continue to Stage 3", "recommended": true, "action": "next_stage" },
+      { "label": "Review foundation code", "action": "review_code" },
+      { "label": "Test build manually", "action": "manual_test" },
+      { "label": "Review CMakeLists.txt", "action": "review_cmake" },
+      { "label": "Pause here", "action": "pause" }
+    ]
+  },
+  "stage_3_complete": {
+    "completion_statement": "APVTS implemented with all parameters",
+    "options": [
+      { "label": "Continue to Stage 4", "recommended": true, "action": "next_stage" },
+      { "label": "Review parameter setup", "action": "review_code" },
+      { "label": "Test parameter values", "action": "manual_test" },
+      { "label": "Pause here", "action": "pause" }
+    ]
+  },
+  "stage_4_complete": {
+    "completion_statement": "DSP implementation complete",
+    "options": [
+      { "label": "Continue to Stage 5", "recommended": true, "action": "next_stage" },
+      { "label": "Review DSP code", "action": "review_code" },
+      { "label": "Test audio processing", "action": "manual_test" },
+      { "label": "Run validation suite", "action": "run_tests", "discovery": "Automated pluginval testing" },
+      { "label": "Pause here", "action": "pause" }
+    ]
+  },
+  "stage_5_complete": {
+    "completion_statement": "GUI integrated with parameter bindings",
+    "options": [
+      { "label": "Continue to Stage 6", "recommended": true, "action": "next_stage" },
+      { "label": "Review GUI code", "action": "review_code" },
+      { "label": "Test UI manually", "action": "manual_test" },
+      { "label": "Save as template", "action": "save_template", "discovery": "Add to UI template library" },
+      { "label": "Pause here", "action": "pause" }
+    ]
+  },
+  "stage_6_complete": {
+    "completion_statement": "Validation complete - plugin ready for use",
+    "options": [
+      { "label": "Install plugin", "recommended": true, "action": "install" },
+      { "label": "Review CHANGELOG", "action": "review_changelog" },
+      { "label": "Test in DAW", "action": "manual_test" },
+      { "label": "Create distribution package", "action": "package" },
+      { "label": "Done", "action": "complete" }
+    ]
+  },
+  "build_failure": {
+    "completion_statement": "Build failed at stage {stage}",
+    "options": [
+      { "label": "Investigate", "action": "deep_research", "discovery": "Run deep-research to find root cause" },
+      { "label": "Show me the code", "action": "show_code" },
+      { "label": "Show full build output", "action": "show_build_log" },
+      { "label": "I'll fix it manually", "action": "manual_fix" }
+    ]
+  },
+  "validation_failure": {
+    "completion_statement": "pluginval failed with {count} errors",
+    "options": [
+      { "label": "Investigate", "action": "deep_research", "discovery": "Deep investigation for validation issues" },
+      { "label": "Show failures", "action": "show_failures" },
+      { "label": "Retry validation", "action": "retry" },
+      { "label": "I'll fix it manually", "action": "manual_fix" }
+    ]
+  },
+  "phase_complete": {
+    "completion_statement": "Phase {phase} of stage {stage} complete",
+    "options": [
+      { "label": "Continue to next phase", "recommended": true, "action": "next_phase" },
+      { "label": "Review phase code", "action": "review_code" },
+      { "label": "Test this phase", "action": "manual_test" },
+      { "label": "Pause here", "action": "pause" }
+    ]
+  }
+}

@@ -9,8 +9,17 @@ allowed-tools:
   - WebSearch # Web research (Level 2-3)
 preconditions:
   - Problem is non-trivial (quick Context7 lookup insufficient)
-extended-thinking: false # Level 1-2, true for Level 3 (15k budget)
+extended-thinking: false # Note: Level 3 enforcement happens via <delegation_rule> gate below, not this YAML setting
 timeout: 3600 # 60 min max
+
+<extended_thinking_gate>
+IF level = 3:
+  MUST enable extended-thinking with 15,000 token budget
+  MUST verify activation before spawning subagents
+ELSE IF level IN [1, 2]:
+  MUST NOT enable extended-thinking
+  Use standard reasoning for quick/moderate research
+</extended_thinking_gate>
 ---
 
 # deep-research Skill
@@ -19,33 +28,53 @@ timeout: 3600 # 60 min max
 
 ## Overview
 
-This skill performs thorough research on technical problems by consulting multiple knowledge sources with automatic escalation based on confidence. Starts fast (5 min local lookup) and escalates as needed (up to 60 min parallel investigation).
-
-**Why graduated protocol matters:**
-
-Most problems have known solutions (Level 1: 5 min). Complex problems need deep research (Level 3: 60 min). Graduated protocol prevents over-researching simple problems while ensuring complex problems get thorough investigation.
-
-**Key innovation:** Stops as soon as confident answer found. User controls depth via decision menus.
+Multi-level autonomous investigation (Level 1: 5 min local → Level 2: 30 min web → Level 3: 60 min parallel). Stops at first confident answer. User controls depth.
 
 ---
 
-## Read-Only Protocol
+<invariant type="read_only_protocol" severity="critical">
+This skill is READ-ONLY and ADVISORY ONLY.
 
-**CRITICAL:** This skill is **read-only** and **advisory only**. It NEVER:
+NEVER:
+- Edit code files via Edit/Write/NotebookEdit tools
+- Run build commands (npm, CMake, compiler)
+- Modify contracts or configurations
+- Implement any solutions
 
-- Edits code files
-- Runs builds
-- Modifies contracts or configurations
-- Implements solutions
+ONLY:
+- Search for information (Grep, Glob, Read, WebSearch, WebFetch)
+- Analyze existing code and documentation
+- Generate reports and recommendations
+- Present findings with decision menus
 
-**Workflow handoff:**
+ALWAYS delegate implementation to plugin-improve skill via handoff protocol.
+Violation of this invariant breaks the system architecture.
+</invariant>
 
-1. Research completes and presents findings with decision menu
-2. User selects "Apply solution"
-3. Output routing instruction: "User selected: Apply solution. Next step: Invoke plugin-improve skill."
-4. Main conversation (orchestrator) sees routing instruction and invokes plugin-improve skill
-5. plugin-improve reads research findings from conversation history
-6. plugin-improve handles all implementation (with versioning, backups, testing)
+<handoff_protocol target_skill="plugin-improve">
+<trigger>User selects option 1 ("Apply solution") from decision menu</trigger>
+
+<deep_research_output>
+THIS SKILL outputs exact text:
+"User selected: Apply solution. Next step: Invoke plugin-improve skill."
+
+Then STOPS execution (no further implementation).
+</deep_research_output>
+
+<orchestrator_action>
+Main conversation sees the directive "Next step: Invoke plugin-improve skill"
+and uses Skill tool to invoke plugin-improve.
+</orchestrator_action>
+
+<context_passing>
+plugin-improve reads research findings from conversation history.
+plugin-improve skips Phase 0.5 investigation (already completed by deep-research).
+</context_passing>
+
+<enforcement>
+deep-research NEVER implements. Only plugin-improve implements.
+</enforcement>
+</handoff_protocol>
 
 **Note:** The routing instruction is a directive to the main conversation. When the orchestrator sees "Invoke plugin-improve skill", it will use the Skill tool to invoke plugin-improve. This is the standard handoff protocol.
 
@@ -75,147 +104,133 @@ Most problems have known solutions (Level 1: 5 min). Complex problems need deep 
 
 ---
 
+<critical_sequence name="graduated_research_protocol" skip_prevention="strict">
+<level number="1" name="quick_check" max_time_minutes="10">
+  <goal>Find quick answer from local knowledge base or JUCE API docs</goal>
+
+  <required_steps>
+    1. Search local troubleshooting docs
+    2. Quick Context7 lookup
+    3. Assess confidence
+  </required_steps>
+
+  <exit_conditions>
+    IF confidence = HIGH: Present decision menu, ALLOW user to proceed
+    ELSE: MUST escalate to Level 2 (no skip option)
+  </exit_conditions>
+</level>
+
+<level number="2" name="moderate_investigation" max_time_minutes="30">
+  <prerequisite>Level 1 completed OR user manually started at Level 2</prerequisite>
+
+  <goal>Deep-dive JUCE docs, forums, GitHub for authoritative answers</goal>
+
+  <required_steps>
+    1. Context7 deep-dive (advanced queries, cross-references)
+    2. JUCE forum search via WebSearch
+    3. GitHub issue search (juce-framework/JUCE)
+    4. Synthesize findings from multiple sources
+  </required_steps>
+
+  <exit_conditions>
+    IF confidence IN [HIGH, MEDIUM]: Present decision menu
+    ELSE IF confidence = LOW OR novel_problem = true: MUST escalate to Level 3
+  </exit_conditions>
+</level>
+
+<level number="3" name="deep_research" max_time_minutes="60">
+  <prerequisite>Level 2 completed OR user manually started at Level 3</prerequisite>
+
+  <goal>Parallel subagent investigation for novel/complex problems</goal>
+
+  <model_requirements>
+    MUST use: claude-opus-4-1-20250805
+    MUST enable: extended-thinking with 15k budget
+    NEVER use: Sonnet (insufficient synthesis capacity)
+  </model_requirements>
+
+  <required_steps>
+    1. Switch to Opus + extended thinking
+    2. Identify 2-3 research approaches
+    3. Spawn parallel subagents via Task tool (NOT serial)
+    4. Synthesize findings with extended thinking
+    5. Generate comprehensive report
+  </required_steps>
+
+  <exit_conditions>
+    ALWAYS: Present decision menu (no further escalation possible)
+  </exit_conditions>
+</level>
+
+<enforcement_rules>
+- NEVER skip Level 1 unless user explicitly requests starting at Level 2/3
+- NEVER use serial investigation at Level 3 (must be parallel)
+- NEVER use Sonnet at Level 3 (must be Opus)
+- NEVER forget extended thinking at Level 3
+- NEVER implement solutions (always delegate to plugin-improve)
+</enforcement_rules>
+</critical_sequence>
+
 ## Level 1: Quick Check (5-10 min, Sonnet, no extended thinking)
 
-**Goal:** Find solution in local knowledge base or basic JUCE docs
+Search local docs + Context7 for known solutions.
 
-### Process
+See `references/research-protocol.md#level-1-quick-check` for detailed process.
 
-1. **Parse research topic/question**
+<success_criteria level="1">
+- Found exact match in local docs OR clear API documentation
+- HIGH confidence (80%+)
+- Solution directly applicable without modification
+</success_criteria>
 
-   - Extract keywords
-   - Identify JUCE components involved
-   - Classify problem type (build, runtime, API usage, etc.)
+<critical_sequence name="level1_quick_check" enforce_order="strict">
+<step number="1" required="true">Parse research topic (keywords, JUCE components, problem type)</step>
+<step number="2" required="true">Search local troubleshooting docs</step>
+<step number="3" required="true">Check Context7 JUCE docs</step>
+<step number="4" required="true">Assess confidence (HIGH/MEDIUM/LOW)</step>
 
-2. **Search local troubleshooting docs:**
+<decision_gate name="level1_outcome" enforce="strict">
+IF confidence = HIGH:
+  THEN present decision menu with solution
+  WAIT for user selection
 
-   ```bash
-   # Search by keywords
-   grep -r "[topic keywords]" troubleshooting/
-
-   # Check relevant categories
-   ls troubleshooting/by-symptom/[category]/
-
-   # Search both paths (by-plugin and by-symptom)
-   ```
-
-3. **Check Context7 JUCE docs for direct answers:**
-
-   - Query for relevant class/API
-   - Check method signatures
-   - Review basic usage examples
-   - Look for known limitations
-
-4. **Assess confidence:**
-
-   - **HIGH:** Exact match in local docs OR clear API documentation
-   - **MEDIUM:** Similar issue found but needs adaptation
-   - **LOW:** No relevant matches or unclear documentation
-
-5. **Decision point:**
-
-   **If HIGH confidence:**
-
-   ```
-   ✓ Level 1 complete (found solution)
-
-   Solution: [Brief description]
-   Source: [Local doc or JUCE API]
-
-   What's next?
-   1. Apply solution (recommended)
-   2. Review details - See full explanation
-   3. Continue deeper - Escalate to Level 2 for more options
-   4. Other
-   ```
-
-   **If MEDIUM/LOW confidence:**
-   Auto-escalate to Level 2 with notification:
-
-   ```
-   Level 1: No confident solution found
-   Escalating to Level 2 (moderate investigation)...
-   ```
+ELSE IF confidence IN [MEDIUM, LOW]:
+  THEN auto-escalate to Level 2
+  OUTPUT notification: "Level 1: No confident solution found. Escalating to Level 2..."
+  PROCEED to Level 2 process
+</decision_gate>
+</critical_sequence>
 
 ---
 
 ## Level 2: Moderate Investigation (15-30 min, Sonnet, no extended thinking)
 
-**Goal:** Find authoritative answer through comprehensive documentation and community knowledge
+Deep-dive Context7, JUCE forums, GitHub for authoritative answers.
 
-### Process
+See `references/research-protocol.md#level-2-moderate-investigation` for detailed process.
 
-1. **Context7 deep-dive:**
+<success_criteria level="2">
+- Found authoritative answer verified by multiple sources
+- MEDIUM-HIGH confidence (60%+)
+- Solution adaptable with minor modifications
+</success_criteria>
 
-   - Full module documentation
-   - Code examples and patterns
-   - Related classes and methods
-   - Best practices sections
-   - Migration guides (if version-related)
+<decision_gate name="level2_outcome" enforce="strict">
+IF confidence IN [HIGH, MEDIUM]:
+  THEN present decision menu with solution options
+  OPTIONS: Apply solution | Review findings | Escalate to Level 3 | Other
+  WAIT for user selection
 
-2. **JUCE forum search via WebSearch:**
+ELSE IF confidence = LOW:
+  THEN auto-escalate to Level 3
+  OUTPUT notification: "Level 2: Low confidence. Escalating to Level 3 (deep research)..."
+  PROCEED to Level 3 process
 
-   ```
-   Query: "site:forum.juce.com [topic]"
-
-   Look for:
-   - Recent threads (last 2 years)
-   - Accepted solutions
-   - JUCE team responses
-   - Multiple user confirmations
-   ```
-
-3. **GitHub issue search:**
-
-   ```
-   Query: "site:github.com/juce-framework/JUCE [topic]"
-
-   Look for:
-   - Closed issues with solutions
-   - Pull requests addressing problem
-   - Code examples in discussions
-   - Version-specific fixes
-   ```
-
-4. **Synthesize findings:**
-
-   - Compare multiple sources
-   - Verify version compatibility (JUCE 8.x)
-   - Assess solution quality (proper fix vs workaround)
-   - Identify common recommendations
-
-5. **Decision point:**
-
-   **If HIGH/MEDIUM confidence:**
-
-   ```
-   ✓ Level 2 complete (found N solutions)
-
-   Investigated sources:
-   - Context7 JUCE docs: [Finding]
-   - JUCE forum: [N threads]
-   - GitHub: [N issues]
-
-   Solutions found:
-   1. [Solution 1] (recommended)
-   2. [Solution 2] (alternative)
-
-   What's next?
-   1. Apply recommended solution
-   2. Review all options - Compare approaches
-   3. Continue deeper - Escalate to Level 3 (parallel investigation)
-   4. Other
-   ```
-
-   **If LOW confidence OR novel problem:**
-   Auto-escalate to Level 3 with notification:
-
-   ```
-   Level 2: Complex problem detected (requires original implementation)
-   Escalating to Level 3 (deep research with parallel investigation)...
-
-   Switching to Opus model + extended thinking (may take up to 60 min)
-   ```
+ELSE IF problem_type = "novel_implementation":
+  THEN auto-escalate to Level 3
+  OUTPUT notification: "Level 2: Novel problem requires parallel investigation. Escalating to Level 3..."
+  PROCEED to Level 3 process
+</decision_gate>
 
 ---
 
@@ -223,423 +238,104 @@ Most problems have known solutions (Level 1: 5 min). Complex problems need deep 
 
 **Goal:** Comprehensive investigation with parallel subagent research for novel/complex problems
 
-### Process
+<delegation_rule level="3" name="level3_requirements" enforce="strict">
+<model_switch>
+MUST switch to: claude-opus-4-1-20250805
+MUST enable: extended-thinking with 15,000 token budget
+MUST set timeout: 3600 seconds (60 min)
+NEVER use: Sonnet at Level 3 (insufficient capacity for synthesis)
+</model_switch>
 
-1. **Switch to Opus model with extended thinking:**
+<subagent_requirement>
+MUST spawn 2-3 parallel research subagents via Task tool.
+MUST invoke ALL subagents in PARALLEL (single response with multiple Task calls).
+NEVER invoke subagents sequentially (defeats 60-min → 20-min optimization).
 
-   ```yaml
-   extended_thinking: true
-   thinking_budget: 15000
-   timeout: 3600 # 60 min
-   ```
+Each subagent runs in fresh context with focused research goal.
+</subagent_requirement>
 
-2. **Identify research approaches:**
+<timing_expectation>
+3 parallel subagents × 20 min each = 20 min total wall time
+NOT 60 min serial time
+</timing_expectation>
+</delegation_rule>
 
-   Analyze problem and determine 2-3 investigation paths:
+Parallel subagent investigation for novel/complex problems.
 
-   **For DSP algorithm questions:**
+See `references/research-protocol.md#level-3-deep-research` for detailed process.
 
-   - Algorithm A investigation (e.g., BLEP anti-aliasing)
-   - Algorithm B investigation (e.g., oversampling approach)
-   - Commercial implementation research (industry standards)
-
-   **For novel feature implementation:**
-
-   - JUCE native approach (using built-in APIs)
-   - External library approach (e.g., RubberBand, SoundTouch)
-   - Custom implementation approach (from scratch)
-
-   **For performance optimization:**
-
-   - Algorithm optimization (better complexity)
-   - Caching/pre-computation (trade memory for CPU)
-   - SIMD/parallel processing (JUCE SIMD wrappers)
-
-3. **Spawn parallel research subagents:**
-
-   Use Task tool to spawn 2-3 specialized research agents in fresh contexts:
-
-   ```typescript
-   // Example: Wavetable anti-aliasing research
-
-   Task(
-     (subagent_type = "general-purpose"),
-     (description = "Research BLEP anti-aliasing"),
-     (prompt = `
-       Investigate Band-Limited Step (BLEP) anti-aliasing for wavetable synthesis.
-   
-       Research:
-       1. Algorithm description and theory
-       2. JUCE API support (dsp::Oscillator helpers?)
-       3. Implementation complexity (1-5 scale)
-       4. CPU performance characteristics
-       5. Audio quality assessment
-       6. Code examples or references
-   
-       Return structured findings:
-       {
-         "approach": "BLEP",
-         "juce_support": "description",
-         "complexity": 3,
-         "cpu_cost": "low",
-         "quality": "high",
-         "pros": ["...", "..."],
-         "cons": ["...", "..."],
-         "references": ["...", "..."]
-       }
-     `)
-   );
-
-   Task(
-     (subagent_type = "general-purpose"),
-     (description = "Research oversampling anti-aliasing"),
-     (prompt = `
-       Investigate oversampling + filtering anti-aliasing for wavetable synthesis.
-   
-       Research:
-       1. Algorithm description (render high SR, filter, downsample)
-       2. JUCE API support (juce::dsp::Oversampling class?)
-       3. Implementation complexity (1-5 scale)
-       4. CPU performance characteristics
-       5. Audio quality assessment
-       6. Code examples or references
-   
-       Return structured findings:
-       {
-         "approach": "Oversampling",
-         "juce_support": "description",
-         "complexity": 2,
-         "cpu_cost": "medium",
-         "quality": "high",
-         "pros": ["...", "..."],
-         "cons": ["...", "..."],
-         "references": ["...", "..."]
-       }
-     `)
-   );
-
-   Task(
-     (subagent_type = "general-purpose"),
-     (description = "Research commercial implementations"),
-     (prompt = `
-       Research how commercial wavetable synthesizers handle anti-aliasing.
-   
-       Investigate:
-       1. Industry standard approaches
-       2. Common trade-offs (CPU vs quality)
-       3. Best practices from established plugins
-       4. Any public information on implementations
-   
-       Return structured findings:
-       {
-         "industry_standard": "description",
-         "common_approach": "...",
-         "trade_offs": "...",
-         "references": ["...", "..."]
-       }
-     `)
-   );
-   ```
-
-   **Each subagent:**
-
-   - Runs in fresh context (no accumulated conversation)
-   - Has focused research goal
-   - Returns structured findings
-   - Takes 10-20 minutes
-   - Runs in parallel (3 agents = 20 min total, not 60 min)
-
-4. **Main context synthesis (extended thinking):**
-
-   After all subagents return, use extended thinking to synthesize:
-
-   - **Aggregate findings** from all subagents
-   - **Compare approaches:**
-     - Pros/cons for each
-     - Implementation complexity (1-5 scale)
-     - CPU cost vs quality trade-offs
-     - JUCE integration ease
-   - **Recommend best fit:**
-     - For this specific use case
-     - Considering complexity budget
-     - Balancing CPU and quality
-   - **Implementation roadmap:**
-     - Step-by-step approach
-     - JUCE APIs to use
-     - Potential pitfalls
-     - Testing strategy
-
-5. **Academic paper search (if applicable):**
-
-   For DSP algorithms, search for authoritative papers:
-
-   - "Reducing Aliasing from Synthetic Audio Signals"
-   - "Digital Audio Signal Processing"
-   - "Real-Time Audio Programming"
-
-6. **Generate comprehensive report:**
-
-   Use template from `assets/report-template.json` with populated values:
-
-   ```json
-   {
-     "agent": "deep-research",
-     "status": "success",
-     "level": 3,
-     "topic": "[research topic]",
-     "findings": [
-       {
-         "solution": "[Approach 1]",
-         "confidence": "high|medium|low",
-         "description": "...",
-         "pros": ["...", "..."],
-         "cons": ["...", "..."],
-         "implementation_complexity": 3,
-         "references": ["...", "..."]
-       },
-       {
-         "solution": "[Approach 2]",
-         ...
-       }
-     ],
-     "recommendation": 0,  // Index into findings
-     "reasoning": "Why this approach is recommended...",
-     "sources": [
-       "Context7: ...",
-       "JUCE Forum: ...",
-       "Paper: ...",
-       "Subagent findings: ..."
-     ],
-     "time_spent_minutes": 45,
-     "escalation_path": [1, 2, 3]
-   }
-   ```
-
-7. **Present findings:**
-
-   ```
-   ✓ Level 3 complete (comprehensive investigation)
-
-   Investigated N approaches:
-   1. [Approach 1] - Complexity: 3/5, CPU: Low, Quality: High
-   2. [Approach 2] - Complexity: 2/5, CPU: Medium, Quality: High
-   3. [Approach 3] - Complexity: 4/5, CPU: Low, Quality: Very High
-
-   Recommendation: [Approach 2]
-   Reasoning: [Why this is the best fit]
-
-   What's next?
-   1. Apply recommended solution (recommended)
-   2. Review all findings - See detailed comparison
-   3. Try alternative approach - [Approach N name]
-   4. Document findings - Save to troubleshooting/
-   5. Other
-   ```
+<success_criteria level="3">
+- Comprehensive investigation from multiple angles
+- Novel insights or authoritative precedent found
+- HIGH confidence after synthesis
+</success_criteria>
 
 ---
 
 ## Report Generation
 
-All levels return structured report. Format depends on level:
+Each level generates a structured report using templates in `assets/`:
+- Level 1: `assets/level1-report-template.md`
+- Level 2: `assets/level2-report-template.md`
+- Level 3: `assets/level3-report-template.md`
 
-### Level 1 Report (Quick)
-
-```markdown
-## Research Report: [Topic]
-
-**Level:** 1 (Quick Check)
-**Time:** 5 minutes
-**Confidence:** HIGH
-
-**Source:** troubleshooting/by-plugin/[Plugin]/[category]/[file].md
-
-**Solution:**
-[Direct answer from local docs or JUCE API]
-
-**How to apply:**
-[Step-by-step]
-
-**Reference:** [Source file path or JUCE API link]
-```
-
-### Level 2 Report (Moderate)
-
-```markdown
-## Research Report: [Topic]
-
-**Level:** 2 (Moderate Investigation)
-**Time:** 18 minutes
-**Confidence:** MEDIUM-HIGH
-
-**Sources:**
-
-- Context7 JUCE docs: [Finding]
-- JUCE forum: 3 threads reviewed
-- GitHub: 2 issues reviewed
-
-**Solutions:**
-
-### Option 1: [Recommended]
-
-**Approach:** ...
-**Pros:** ...
-**Cons:** ...
-**Implementation:** ...
-
-### Option 2: [Alternative]
-
-**Approach:** ...
-**Pros:** ...
-**Cons:** ...
-**Implementation:** ...
-
-**Recommendation:** Option 1
-**Reasoning:** [Why recommended]
-
-**References:**
-
-- [Source 1]
-- [Source 2]
-```
-
-### Level 3 Report (Comprehensive)
-
-```markdown
-## Research Report: [Topic]
-
-**Level:** 3 (Deep Research)
-**Time:** 45 minutes
-**Confidence:** HIGH
-**Model:** Opus + Extended Thinking
-
-**Investigation approach:**
-
-- Spawned 3 parallel research subagents
-- Investigated 3 distinct approaches
-- Synthesized findings with extended thinking
-
-**Findings:**
-
-### Approach 1: [Name]
-
-**Description:** ...
-**JUCE support:** juce::dsp::Oversampling
-**Complexity:** 2/5
-**CPU cost:** Medium
-**Quality:** High
-**Pros:**
-
-- Works for all waveforms
-- JUCE native API
-  **Cons:**
-- Higher CPU than alternatives
-  **References:**
-- JUCE dsp::Oversampling docs
-- Subagent findings
-
-### Approach 2: [Name]
-
-**Description:** ...
-[Same structure]
-
-### Approach 3: [Name]
-
-**Description:** ...
-[Same structure]
-
-**Recommendation:** Approach 1
-**Reasoning:**
-Oversampling is simpler to implement (complexity 2/5) and works for arbitrary waveforms.
-BLEP requires waveform-specific code (complexity 3/5). For this use case, simplicity
-outweighs the CPU cost difference.
-
-**Implementation Roadmap:**
-
-1. Add juce::dsp::Oversampling to PluginProcessor.h
-2. Configure in prepareToPlay() with 2x oversampling
-3. Wrap processBlock() wavetable rendering with oversampler
-4. Profile CPU usage and adjust oversampling factor if needed
-
-**Sources:**
-
-- Context7: juce::dsp::Oversampling documentation
-- Paper: Reducing Aliasing from Synthetic Audio Signals (2007)
-- JUCE Forum: Wavetable synthesis best practices
-- Subagent research: 3 parallel investigations
-
-**Testing strategy:**
-
-- Sweep test (play waveform through full frequency range)
-- FFT analysis (check for aliasing harmonics above Nyquist)
-- CPU profiling (ensure real-time safe)
-```
+Reports include: findings summary, confidence assessment, recommended solution, and source references.
 
 ---
 
+<state_requirement name="checkpoint_protocol">
+At the end of each level (when presenting findings), MUST:
+
+1. Present decision menu (numbered list format, NOT AskUserQuestion tool)
+2. WAIT for user response (NEVER auto-proceed)
+3. Route based on selection:
+
+<response_handler option="1" action="apply_solution">
+<condition>User selects option 1 ("Apply solution")</condition>
+<action>
+1. Output handoff directive: "User selected: Apply solution. Next step: Invoke plugin-improve skill."
+2. STOP execution (do not implement)
+3. Orchestrator will invoke plugin-improve skill
+</action>
+</response_handler>
+
+<response_handler option="2" action="review_findings">
+<condition>User selects option 2 ("Review full findings")</condition>
+<action>
+1. Display complete research report
+2. Re-present decision menu
+3. WAIT for new selection
+</action>
+</response_handler>
+
+<response_handler option="3" action="escalate">
+<condition>User selects option 3 ("Escalate to next level")</condition>
+<action>
+1. Proceed to next level (Level 1 → Level 2 → Level 3)
+2. If already at Level 3, inform user no further escalation available
+3. Continue with next level's process
+</action>
+</response_handler>
+
+<response_handler option="other" action="clarify">
+<condition>User provides custom response</condition>
+<action>
+1. Ask for clarification
+2. Re-present decision menu with context
+3. WAIT for selection
+</action>
+</response_handler>
+
+<enforcement>
+NEVER auto-proceed to implementation.
+NEVER skip decision menu.
+ALWAYS wait for user response before continuing.
+</enforcement>
+</state_requirement>
+
 ## Decision Menus
 
-After each level, present decision menu (user controls depth):
-
-### After Level 1
-
-```
-What's next?
-1. Apply solution (recommended) - [One-line description]
-2. Review details - See full explanation
-3. Continue deeper - Escalate to Level 2 for more options
-4. Other
-```
-
-**Handle responses:**
-
-- **Option 1 ("Apply solution"):**
-  Output: "User selected: Apply solution. Next step: Invoke plugin-improve skill."
-  The orchestrator will see this directive and invoke plugin-improve, which reads research findings from history and skips Phase 0.5 investigation.
-- **Option 2:** Display full report, then re-present menu
-- **Option 3:** Escalate to Level 2
-- **Option 4:** Ask what they'd like to do
-
-**IMPORTANT:** This skill is **read-only**. Never edit code, run builds, or modify files. All implementation happens through plugin-improve skill after research completes.
-
-### After Level 2
-
-```
-What's next?
-1. Apply recommended solution - [Solution name]
-2. Review all options - Compare N approaches
-3. Continue deeper - Escalate to Level 3 (may take up to 60 min)
-4. Other
-```
-
-**Handle responses:**
-
-- **Option 1 ("Apply recommended solution"):**
-  Output: "User selected: Apply recommended solution. Next step: Invoke plugin-improve skill."
-  The orchestrator will see this directive and invoke plugin-improve, which reads research findings from history.
-- **Option 2:** Display detailed comparison, then re-present menu
-- **Option 3:** Escalate to Level 3
-- **Option 4:** Ask what they'd like to do
-
-### After Level 3
-
-```
-What's next?
-1. Apply recommended solution (recommended) - [Solution name]
-2. Review all findings - See detailed comparison
-3. Try alternative approach - [Alternative name]
-4. Document findings - Save to troubleshooting/ knowledge base
-5. Other
-```
-
-**Handle responses:**
-
-- **Option 1 ("Apply recommended solution"):**
-  Output: "User selected: Apply recommended solution. Next step: Invoke plugin-improve skill."
-  The orchestrator will see this directive and invoke plugin-improve, which reads research findings from history and proceeds to implementation.
-- **Option 2:** Display comprehensive report with all approaches, then re-present menu
-- **Option 3:** User wants to try different approach - update recommendation to highlight alternative, then output: "Next step: Invoke plugin-improve skill with alternative approach."
-- **Option 4:** Invoke troubleshooting-docs skill to capture findings in knowledge base (for future Level 1 fast path)
-- **Option 5:** Ask what they'd like to do
+After each level, present decision menu (user controls depth) per checkpoint_protocol above.
 
 ---
 
@@ -708,38 +404,6 @@ If user chooses "Yes":
 
 ---
 
-## Success Criteria
-
-Research is successful when:
-
-- ✅ Appropriate level reached (no over-research)
-- ✅ Confidence level clearly stated
-- ✅ Solution(s) provided with pros/cons
-- ✅ Implementation steps included
-- ✅ References cited
-- ✅ User controls depth via decision menus
-
-**Level-specific:**
-
-**Level 1:**
-
-- ✅ Local docs or JUCE API checked
-- ✅ HIGH confidence OR escalated
-
-**Level 2:**
-
-- ✅ Context7, forum, GitHub searched
-- ✅ Multiple sources compared
-- ✅ MEDIUM-HIGH confidence OR escalated
-
-**Level 3:**
-
-- ✅ Parallel subagents spawned (2-3)
-- ✅ Extended thinking used for synthesis
-- ✅ Comprehensive report generated
-- ✅ Clear recommendation with rationale
-
----
 
 ## Error Handling
 
@@ -798,28 +462,6 @@ Results may be incomplete for community knowledge.
 
 ---
 
-## Notes for Claude
-
-**When executing this skill:**
-
-1. Always start at Level 1 (never skip directly to Level 3)
-2. Stop as soon as HIGH confidence achieved (don't over-research)
-3. Switch to Opus + extended thinking at Level 3 (architecture requirement)
-4. Spawn parallel subagents at Level 3 (2-3 concurrent, not serial)
-5. Use relative confidence (HIGH/MEDIUM/LOW based on sources)
-6. Present decision menus (user controls escalation)
-7. Integration with troubleshooting-docs (capture complex solutions)
-8. Timeout at 60 min (return best findings)
-
-**Common pitfalls:**
-
-- Skipping Level 1 local docs check (always fastest path)
-- Serial subagent invocation at Level 3 (use parallel Task calls)
-- Using Sonnet for Level 3 (must switch to Opus)
-- Forgetting extended thinking at Level 3 (critical for synthesis)
-- Over-researching simple problems (stop at HIGH confidence)
-- Not presenting decision menus (user should control depth)
-
 ---
 
 ## Performance Budgets
@@ -852,126 +494,14 @@ Results may be incomplete for community knowledge.
 
 ## Example Scenarios
 
-### Scenario 1: Known Problem (Level 1, 5 min)
+See `references/example-scenarios.md` for detailed walkthroughs of:
+- Scenario 1: WebView freeze (solved at Level 1)
+- Scenario 2: APVTS visibility (escalated to Level 2)
+- Scenario 3: Novel DSP implementation (escalated to Level 3)
+- Scenario 4: JUCE 8 migration (solved at Level 1 via Required Reading)
+- Scenario 5: LookAndFeel propagation (answered at Level 1)
 
-**Topic:** "Parameter not saving in DAW"
-
-**Level 1:**
-
-- Search troubleshooting/by-symptom/parameter-issues/
-- Found: parameter-not-saving-decay-ReverbPlugin-20251110.md
-- HIGH confidence
-
-**Output:**
-
-```
-✓ Level 1 complete (found solution)
-
-Source: Local troubleshooting docs
-
-Problem: APVTS state not reflecting UI changes
-Solution: Implement parameterValueChanged() to update processor state
-
-[Full solution from doc]
-
-What's next?
-1. Apply solution (recommended)
-2. Review details
-3. Continue deeper
-4. Other
-```
-
-**Resolution:** 5 minutes, HIGH confidence
-
-### Scenario 2: JUCE API Question (Level 2, 18 min)
-
-**Topic:** "How to use juce::dsp::Compressor?"
-
-**Level 1:**
-
-- Search troubleshooting/ → No matches
-- Quick Context7 lookup → Found class, but need usage details
-- MEDIUM confidence → Escalate to Level 2
-
-**Level 2:**
-
-- Context7 deep-dive → Full API docs, prepare() and process() methods
-- JUCE forum search → Found example thread with code
-- GitHub search → Found working implementation in examples
-- HIGH confidence
-
-**Output:**
-
-```
-✓ Level 2 complete (found solution)
-
-Sources:
-- Context7: juce::dsp::Compressor API docs
-- JUCE forum: Usage example with threshold/ratio settings
-- GitHub: JUCE examples repository
-
-Solution: [Step-by-step implementation]
-
-What's next?
-1. Apply solution (recommended)
-2. Review all sources
-3. Continue deeper (not necessary, HIGH confidence)
-4. Other
-```
-
-**Resolution:** 18 minutes, HIGH confidence
-
-### Scenario 3: Novel Implementation (Level 3, 45 min)
-
-**Topic:** "Implement wavetable anti-aliasing"
-
-**Level 1:**
-
-- Search troubleshooting/ → No matches
-- Context7 → Found dsp::Oscillator but no anti-aliasing docs
-- LOW confidence → Escalate to Level 2
-
-**Level 2:**
-
-- Context7 deep-dive → No built-in anti-aliasing
-- JUCE forum → Multiple approaches mentioned, no consensus
-- GitHub → Related issues but no clear solution
-- MEDIUM confidence, novel implementation → Escalate to Level 3
-
-**Level 3:**
-
-- Switch to Opus + extended thinking
-- Spawn 3 parallel subagents:
-  - Subagent 1: Research BLEP
-  - Subagent 2: Research oversampling
-  - Subagent 3: Research commercial implementations
-- Synthesize findings (extended thinking)
-- Generate comprehensive report
-
-**Output:**
-
-```
-✓ Level 3 complete (comprehensive investigation)
-
-Investigated 3 approaches:
-1. BLEP - Complexity: 3/5, CPU: Low, Quality: High
-2. Oversampling - Complexity: 2/5, CPU: Medium, Quality: High
-3. Minblep - Complexity: 4/5, CPU: Low, Quality: Very High
-
-Recommendation: Oversampling
-Reasoning: Simplest implementation, works for all waveforms, JUCE native API
-
-[Comprehensive report with implementation roadmap]
-
-What's next?
-1. Apply recommended solution (recommended)
-2. Review all findings
-3. Try alternative (BLEP)
-4. Document findings
-5. Other
-```
-
-**Resolution:** 45 minutes, HIGH confidence, comprehensive investigation
+Each scenario shows escalation logic and time estimates.
 
 ---
 

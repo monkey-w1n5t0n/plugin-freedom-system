@@ -39,32 +39,62 @@ This skill operates in different modes based on the invoking command:
 | 4 | Destroy | `/destroy` | Complete removal with backup |
 | Menu | Interactive | `/clean` | Present menu, user chooses mode |
 
-**Pattern:** Commands are thin routers that invoke this skill with a specific mode. The skill dispatches to the appropriate reference file for detailed implementation.
+**Invocation Pattern:**
+When user runs `/install-plugin [Name]`, the command expands to a prompt that invokes THIS skill.
+You then read the mode from context and delegate to the appropriate reference file:
+- Mode 1 → Read and execute `references/installation-process.md`
+- Mode 2 → Read and execute `references/uninstallation-process.md`
+- Mode 3 → Read and execute `references/mode-3-reset.md`
+- Mode 4 → Read and execute `references/mode-4-destroy.md`
+- Menu → Present menu, wait for selection, then route to chosen mode
 
-**Why this matters:**
+**Installation targets (macOS):**
+- VST3: `~/Library/Audio/Plug-Ins/VST3/`
+- AU: `~/Library/Audio/Plug-Ins/Components/`
+- AAX: `~/Library/Application Support/Avid/Audio/Plug-Ins/` (future)
 
-DAWs scan system folders for plugins. Installing to the correct locations with proper permissions ensures your plugin appears in the DAW's plugin list.
-
-**System folders (macOS):**
-
-- **VST3**: `~/Library/Audio/Plug-Ins/VST3/`
-- **AU (Audio Unit)**: `~/Library/Audio/Plug-Ins/Components/`
-- **AAX** (Pro Tools): `~/Library/Application Support/Avid/Audio/Plug-Ins/` (future support)
+DAWs scan these locations. Correct installation = plugin appears in DAW.
 
 ---
 
 ## Installation Workflow
 
-The complete installation process is documented in detail in the reference files:
+<critical_sequence enforcement="strict" blocking="true">
+The following steps MUST execute in order without skipping:
 
 1. **Build Verification** - Check Release binaries exist, offer to build if missing
+   - Delegate to: `references/installation-process.md` Step 1
+   - Blocking: YES - cannot proceed without binaries
+
 2. **Product Name Extraction** - Extract PRODUCT_NAME from CMakeLists.txt
+   - Delegate to: `references/installation-process.md` Step 2
+   - Required for: All subsequent steps that reference ${PRODUCT_NAME}
+
 3. **Old Version Removal** - Remove existing installations to prevent conflicts
+   - Delegate to: `references/installation-process.md` Step 3
+   - Blocking: NO - can proceed if no old version exists
+
 4. **Copy to System Folders** - Install VST3 and AU to macOS plugin directories
+   - Delegate to: `references/installation-process.md` Step 4
+   - Blocking: YES - core installation step
+
 5. **Permissions Verification** - Set 755 permissions for DAW access
+   - Delegate to: `references/installation-process.md` Step 5
+   - Blocking: YES - DAWs cannot load plugins without correct permissions
+
 6. **Cache Clearing** - Clear Ableton Live and Logic Pro caches
+   - Delegate to: `references/cache-management.md`
+   - Blocking: NO - warn if fails but continue
+
 7. **Verification** - Confirm installation with file checks and size validation
+   - Delegate to: `references/installation-process.md` Step 7
+   - Blocking: YES - must confirm success before declaring completion
+
 8. **PLUGINS.md Update** - Record installation status and locations
+   - Delegate to: `references/installation-process.md` Step 8
+   - Blocking: YES - state tracking is part of success criteria
+
+</critical_sequence>
 
 See **[references/installation-process.md](references/installation-process.md)** for complete implementation.
 
@@ -126,10 +156,26 @@ Complete removal with backup for abandoned plugins:
 - Everything: source code, binaries, build artifacts, PLUGINS.md entry
 - Optionally: troubleshooting docs mentioning the plugin
 
-**Safety features:**
-- Timestamped backup created before deletion
-- Requires typing exact plugin name to confirm
-- Blocks if status is 🚧 (protects in-progress work)
+<decision_gate type="destructive_confirmation" bypass="never">
+**Safety Protocol - Requires Explicit User Confirmation:**
+
+<gate_conditions>
+1. Check status ≠ 🚧 (block if in development)
+2. Create timestamped backup to `backups/destroyed/`
+3. Show deletion preview (files, sizes, locations)
+4. Require exact plugin name match (case-sensitive)
+</gate_conditions>
+
+<confirmation_format>
+User MUST type exact plugin name to proceed.
+- Correct match → Proceed to deletion
+- Incorrect match → Abort with error message
+- Empty response → Abort
+</confirmation_format>
+
+You MUST NOT proceed with deletion until user provides correct confirmation.
+This gate cannot be bypassed - it protects against accidental data loss.
+</decision_gate>
 
 **Use case:** Abandoned experiment, complete failure, duplicate by mistake. Never using this plugin again.
 
@@ -153,10 +199,15 @@ Choose (1-4): _
 ```
 
 **Menu logic:**
-- Read current plugin status from PLUGINS.md
-- Show appropriate options based on status
-- Route to selected mode
-- Handle cancellation gracefully
+1. Read current status from PLUGINS.md
+2. Filter options based on status:
+   - IF status = "💡 Ideated" → Show options 2, 3, 4 (cannot uninstall what isn't built)
+   - IF status = "✅ Working" → Show options 1, 2, 3, 4 (not installed yet)
+   - IF status = "📦 Installed" → Show ALL options (full lifecycle available)
+   - IF status = "🚧 In Progress" → Show only option 4 (Cancel)
+   - ELSE (unknown status) → Show ALL options with warning: "Unknown status '[status]' - showing all options"
+3. Present filtered menu, wait for user choice
+4. Route to selected mode (1-4) or exit on Cancel
 
 ---
 
@@ -175,8 +226,18 @@ See **[references/error-handling.md](references/error-handling.md)** for all err
 
 ## Decision Menu After Installation
 
-After successful installation:
+<decision_gate type="checkpoint" enforcement="strict">
+After successful installation, you MUST present this decision menu and WAIT for user response.
 
+<checkpoint_protocol>
+1. Display completion statement with checkmark
+2. Present numbered menu (5 options)
+3. STOP execution and wait for user choice
+4. Do NOT auto-proceed or make assumptions
+5. Only continue after receiving user selection (1-5)
+</checkpoint_protocol>
+
+<menu_format>
 ```
 ✓ [PluginName] installed successfully
 
@@ -189,14 +250,18 @@ What's next?
 
 Choose (1-5): _
 ```
+</menu_format>
 
-**Handle responses:**
+<response_handlers>
+- **Option 1:** Provide DAW testing guidance (terminal - ends workflow)
+- **Option 2:** Invoke `plugin-ideation` skill via natural language (not direct Tool call)
+- **Option 3:** Suggest creating user manual in `.ideas/` directory
+- **Option 4:** Provide build export instructions (future feature note)
+- **Option 5:** Ask open-ended "What would you like to do?"
+</response_handlers>
 
-- **Option 1:** Provide DAW testing guidance
-- **Option 2:** Invoke `plugin-ideation` skill
-- **Option 3:** Suggest creating user manual in `.ideas/`
-- **Option 4:** Provide build export instructions (future feature)
-- **Option 5:** Ask what they'd like to do
+This is a system-wide checkpoint protocol enforcement. Never skip this menu.
+</decision_gate>
 
 ---
 
@@ -216,6 +281,48 @@ Choose (1-5): _
 **Invokes:**
 
 - None (terminal skill, doesn't invoke others)
+
+<handoff_protocol>
+## Invocation Protocol
+
+When this skill is invoked, check the triggering context:
+
+<invocation_modes>
+1. **Direct command** (e.g., `/install-plugin GainKnob`)
+   - Extract plugin name from command argument
+   - Set mode = 1 (Installation)
+   - Execute installation workflow
+
+2. **From plugin-workflow** (after Stage 6 completion)
+   - Plugin name provided in handoff state
+   - Offer installation via decision menu
+   - IF user chooses install → Set mode = 1 and execute
+
+3. **From plugin-improve** (after successful changes)
+   - Plugin name in context
+   - Offer reinstallation (only if previously installed)
+   - IF user accepts → Set mode = 1 and execute
+
+4. **Natural language** ("Install TapeAge")
+   - Parse plugin name from utterance
+   - Set mode = 1 (Installation)
+   - Execute installation workflow
+
+5. **Interactive menu** (from `/clean` command)
+   - Plugin name provided
+   - Set mode = Menu
+   - Present options, wait for selection, route to chosen mode
+</invocation_modes>
+
+<return_protocol>
+After completion, this skill MUST:
+1. Present decision menu (checkpoint protocol)
+2. Wait for user response
+3. Return control to user (terminal skill - does not invoke other skills)
+
+Do NOT automatically proceed to next action.
+</return_protocol>
+</handoff_protocol>
 
 **Updates:**
 
@@ -253,9 +360,9 @@ Installation is successful when:
 
 ---
 
-## Notes for Claude
+## Notes for Claude - Mode 1 (Installation)
 
-**When executing this skill:**
+**When executing the installation workflow (Mode 1):**
 
 1. Always check for Release build first - offer to build if missing
 2. Extract PRODUCT_NAME from CMakeLists.txt (may contain spaces)
@@ -265,10 +372,3 @@ Installation is successful when:
 6. Verification checks should be comprehensive (permissions, timestamps, sizes)
 7. PLUGINS.md status update is part of success criteria
 8. Provide clear next steps after installation
-
-**Common pitfalls:**
-
-- Forgetting to quote paths with spaces (breaks with product names like "Tape Age")
-- Not removing old versions (causes DAW confusion)
-- Not clearing caches (DAW shows stale plugin metadata)
-- Missing PLUGINS.md update (state tracking incomplete)

@@ -1,45 +1,60 @@
 # build-automation
 
 ---
-
 skill: build-automation
-description: Orchestrates plugin builds using centralized build script with comprehensive failure handling
+description: Orchestrates plugin builds using centralized build script with comprehensive failure handling. Invoked during compilation, build verification, installation. Handles both success and failure paths with structured decision menus.
 category: core
 invoked_by:
-
-- plugin-workflow (Stages 2-6)
-- plugin-improve (Phase 5)
-- plugin-lifecycle (via build verification)
-  invokes:
-- scripts/build-and-install.sh
-- troubleshooter agent (on failure, if user chooses "Investigate")
-  tools:
-- Bash
-- Read
-- Task
-  output:
-- Build success/failure status
-- Log file path
-- Decision menu on failure
-
+  - plugin-workflow
+  - plugin-improve
+  - plugin-lifecycle
+invokes:
+  - scripts/build-and-install.sh
+  - troubleshooter
+tools:
+  - Bash
+  - Read
+  - Task
+output:
+  - build_status
+  - log_file_path
+  - user_decision
+preconditions:
+  - scripts/build-and-install.sh exists and is executable
+  - Plugin directory exists at plugins/$PLUGIN_NAME
+  - CMakeLists.txt exists in plugin directory
+  - CMake and Ninja installed (validated by build script)
 ---
+
+## Success Criteria
+
+This skill succeeds when:
+1. Build script executes and returns exit code
+2. Build result communicated to user (success or failure message)
+3. Log file path displayed
+4. Context-appropriate decision menu presented
+5. User choice captured and executed
+6. Control returned to invoking skill
+
+This skill fails when:
+- Plugin directory doesn't exist
+- Build script not found or not executable
+- User chooses "Wait" and doesn't resume (partial success - workflow paused intentionally)
 
 ## Purpose
 
-The build-automation skill orchestrates plugin builds by invoking the centralized build script (`scripts/build-and-install.sh`) and providing comprehensive failure handling through a structured 4-option protocol. It bridges the gap between workflow stages and the build system, handling both success and failure paths gracefully.
+Orchestrates plugin builds via `scripts/build-and-install.sh` with comprehensive failure handling.
 
-## Integration Points
+**Invokers:** plugin-workflow (Stages 2-6), plugin-improve (Phase 5), plugin-lifecycle (verification)
+**Invokes:** build script, troubleshooter agent (on failure, user option 1)
 
-This skill is invoked by:
+**Key behaviors:**
+- Context-aware build flags (Stage 2 uses `--no-install`, others full build)
+- Structured 5-option failure menu (never auto-retry)
+- Context-specific success menus (different per stage)
+- Always returns control to invoker (never continues autonomously)
 
-- **plugin-workflow**: After each stage completion (Stages 2-6) to build and verify changes
-- **plugin-improve**: After implementation changes (Phase 5) to rebuild with modifications
-- **plugin-lifecycle**: During installation verification to ensure plugins are buildable
-
-This skill invokes:
-
-- **scripts/build-and-install.sh**: Centralized 7-phase build pipeline
-- **troubleshooter agent**: Deep research agent (via Task tool) when user chooses "Investigate" option
+<critical_sequence name="build_workflow" enforce_order="strict">
 
 ## Build Workflow
 
@@ -94,116 +109,35 @@ Build log: logs/[PluginName]/build_TIMESTAMP.log
 
 User can review full build output from log file if needed.
 
+</critical_sequence>
+
+<decision_gate name="build_failure_handling" blocking="true">
+
 ## Failure Protocol
 
-When build fails (exit code 1), present this structured decision menu:
+When build fails (exit code 1):
 
+1. Extract error from log (last 50 lines or first error indicator)
+2. Present structured menu (see references/failure-protocol.md for option details)
+3. WAIT for user choice (NEVER auto-proceed)
+4. Execute chosen option
+5. For options 1-3: Re-present menu after completion (iterative debugging)
+
+Menu structure:
 ```
 ⚠️ Build failed
 
 What would you like to do?
-1. Investigate - Run troubleshooter agent to research the error (recommended)
-2. Show me the build log - Display full build output for manual review
-3. Show me the code - Open relevant source files where error occurred
-4. Wait - I'll fix it manually and tell you to resume
+1. Investigate - Run troubleshooter agent (recommended)
+2. Show me the build log - Display full build output
+3. Show me the code - Open source files with error
+4. Wait - I'll fix manually
 5. Other
-
-Choose (1-5): _
 ```
 
-### Option 1: Investigate (Recommended)
+Option implementations: See references/failure-protocol.md
 
-**Purpose**: Automated diagnosis using troubleshooter agent
-
-**Implementation**:
-
-1. Extract error from build log (last 50 lines or first error indicator)
-2. Parse error for key information:
-   - Error message (exact text)
-   - File/line reference (if available)
-   - Error type (CMake config, compilation, linker, etc.)
-3. Invoke troubleshooter agent via Task tool:
-
-   ```markdown
-   Invoke troubleshooter agent to research this build error:
-
-   Error: [extracted error message]
-   Context: Building plugin "[PluginName]" with CMake
-   JUCE version: 8.0.9
-   File: [file path:line number if available]
-
-   Please investigate using the graduated depth protocol and provide a structured report.
-   ```
-
-4. Wait for troubleshooter report (structured markdown)
-5. Display report to user with findings and recommended solution
-6. Ask: "Should I apply this solution?" (Yes/No/Modify)
-   - **Yes**: Apply solution, then ask "Retry build now?"
-   - **No**: Return to failure menu
-   - **Modify**: Accept user modifications, then ask "Retry build now?"
-
-**IMPORTANT**: NEVER auto-retry without explicit user confirmation.
-
-### Option 2: Show Build Log
-
-**Purpose**: Display full build output for manual analysis
-
-**Implementation**:
-
-1. Read log file: `logs/[PluginName]/build_TIMESTAMP.log`
-2. Display last 100 lines (or full log if < 100 lines)
-3. Format for readability (preserve colors if possible)
-4. After display, re-present decision menu (iterative debugging)
-
-### Option 3: Show Code
-
-**Purpose**: Display source files where error occurred
-
-**Implementation**:
-
-1. Parse build error for file/line reference
-   - CMake errors: Extract from CMakeLists.txt references
-   - Compilation errors: Extract from compiler output (e.g., "Source/PluginProcessor.cpp:42")
-   - Linker errors: Show relevant CMakeLists.txt and header files
-2. Read relevant source file using Read tool
-3. Display file with context (±10 lines around error line if line number available)
-4. If no file reference parseable: "Error location not found in build output. Try Option 2 (Show build log)."
-5. After display, re-present decision menu (iterative debugging)
-
-### Option 4: Wait (Manual Fix)
-
-**Purpose**: User will fix issue manually outside workflow
-
-**Implementation**:
-
-1. Display exit message:
-
-   ```
-   Pausing workflow. Please fix the issue manually.
-
-   When ready to retry the build, say:
-   - "resume build" or "retry build" - Retry build with same flags
-   - "continue workflow" - Skip build and continue to next stage (not recommended)
-
-   Build log: logs/[PluginName]/build_TIMESTAMP.log
-   ```
-
-2. Exit skill, return control to invoking skill/workflow
-3. Await user continuation command
-
-### Option 5: Other
-
-**Purpose**: Accept free-form user input for custom actions
-
-**Implementation**:
-
-1. Prompt: "What would you like to do?"
-2. Accept free-text response
-3. Interpret request and act accordingly:
-   - Build-related: Execute custom build command
-   - Code-related: Read/display requested files
-   - Investigation: Perform custom research
-   - Continue: Proceed as requested
+</decision_gate>
 
 ## Success Protocol
 
@@ -245,240 +179,63 @@ Log: logs/[PluginName]/build_TIMESTAMP.log
 
 ### 3. Context-Aware Decision Menu
 
-Present menu based on invoking context:
+Load context-appropriate menu from `assets/success-menus.md` based on invoking stage
 
-#### From Stage 2 (Foundation)
+<handoff_protocol name="return_to_invoker">
 
-```
-Foundation verified. What's next?
-1. Continue to Stage 3 (Shell/Parameters)
-2. Review generated code
-3. Pause workflow
-```
+After user makes decision from success menu:
 
-#### From Stage 3 (Shell)
+1. Identify invoking skill (stored at entry)
+2. Return control using appropriate mechanism:
+   - **plugin-workflow**: Exit with status SUCCESS, await stage dispatcher
+   - **plugin-improve**: Exit with status SUCCESS, await improvement workflow
+   - **Manual invocation**: Exit with final status message
 
-```
-Shell built successfully. What's next?
-1. Continue to Stage 4 (DSP)
-2. Test in DAW now
-3. Review parameter code
-4. Pause workflow
-```
+NEVER continue workflow autonomously after success.
+NEVER invoke next stage directly.
+ALWAYS exit and let invoking skill/workflow orchestrate next action.
 
-#### From Stage 4 (DSP)
+Exit the skill cleanly:
+1. Do NOT invoke any other skills or agents
+2. Do NOT continue to next stage
+3. Simply complete skill execution
+4. The invoking skill/workflow will detect completion and proceed according to its own logic
 
-```
-DSP built successfully. What's next?
-1. Run automated tests (recommended)
-2. Continue to Stage 5 (GUI)
-3. Test in DAW now
-4. Pause workflow
-```
-
-#### From Stage 5 (GUI)
-
-```
-GUI built successfully. What's next?
-1. Run automated tests (recommended)
-2. Continue to Stage 6 (Validation)
-3. Test in DAW now
-4. Pause workflow
-```
-
-#### From Stage 6 (Validation)
-
-```
-Plugin complete! What's next?
-1. Test in DAW (recommended)
-2. View in standalone mode (/show-standalone)
-3. Install to system (/install-plugin)
-4. Make improvements (/improve)
-```
-
-#### From plugin-improve
-
-```
-Update built successfully. What's next?
-1. Test changes in DAW
-2. Continue improving
-3. Done (commit changes)
-```
-
-### 4. Return to Invoking Skill
-
-After user makes decision, return control to the skill that invoked build-automation:
-
-- **plugin-workflow**: Returns to stage dispatcher to continue or pause
-- **plugin-improve**: Returns to improvement workflow to continue or finalize
-- **Manual invocation**: Exits skill, displays final status
-
-**IMPORTANT**: Always return control to invoking skill after success. Don't continue workflow autonomously.
+</handoff_protocol>
 
 ## Integration Examples
 
-### Example 1: plugin-workflow Stage 2 (Foundation)
-
-**Scenario**: foundation-agent completes, plugin-workflow needs to verify compilation
-
-**Invocation**:
-
-- Skill: plugin-workflow
-- Stage: 2 (Foundation)
-- Action: Invoke build-automation with `--no-install` flag
-
-**Success Path**:
-
-1. build-automation invokes: `./scripts/build-and-install.sh --no-install [PluginName]`
-2. Build succeeds (compilation verified)
-3. Displays success message with artifact locations
-4. Presents Stage 2 completion menu
-5. Returns to plugin-workflow with status: SUCCESS
-
-**Failure Path**:
-
-1. Build fails (likely CMake configuration issue)
-2. build-automation presents 4-option failure menu
-3. User chooses "Investigate"
-4. troubleshooter diagnoses: "Missing juce_dsp module in CMakeLists.txt"
-5. User confirms: "Apply solution"
-6. CMakeLists.txt updated to include juce_dsp
-7. User confirms: "Retry build"
-8. Build succeeds
-9. Returns to plugin-workflow with status: SUCCESS
-
-### Example 2: plugin-workflow Stages 3-6 (Implementation Stages)
-
-**Scenario**: dsp-agent completes Phase 4.2, plugin-workflow needs full build + install
-
-**Invocation**:
-
-- Skill: plugin-workflow
-- Stage: 4 (DSP), Phase: 2
-- Action: Invoke build-automation (no flags - full build)
-
-**Success Path**:
-
-1. build-automation invokes: `./scripts/build-and-install.sh [PluginName]`
-2. Build script executes all 7 phases:
-   - Phase 1: Pre-flight validation
-   - Phase 2: Parallel build (VST3 + AU)
-   - Phase 3: Extract PRODUCT_NAME
-   - Phase 4: Remove old versions
-   - Phase 5: Install new versions
-   - Phase 6: Clear DAW caches
-   - Phase 7: Verification
-3. All phases succeed
-4. Displays success message with installation paths
-5. Presents Stage 4 completion menu: "Run automated tests / Continue to Stage 5 / Test in DAW / Pause"
-6. Returns to plugin-workflow with status: SUCCESS
-7. plugin-workflow auto-invokes plugin-testing skill (if user chose "Run tests")
-
-**Failure Path**:
-
-1. Build fails at Phase 2 (compilation error in DSP code)
-2. Error: "plugins/TestPlugin/Source/PluginProcessor.cpp:87: error: 'gain' was not declared in this scope"
-3. build-automation presents 4-option failure menu
-4. User chooses "Show me the code"
-5. Displays PluginProcessor.cpp lines 77-97 with error highlighted
-6. User sees issue: used 'gain' instead of 'gainValue'
-7. User says: "Wait" (will fix manually)
-8. build-automation exits with: "When ready, say 'retry build'"
-9. User fixes code manually
-10. User says: "retry build"
-11. plugin-workflow re-invokes build-automation
-12. Build succeeds
-13. Returns to plugin-workflow with status: SUCCESS
-
-### Example 3: plugin-improve (Bug Fix or Feature Addition)
-
-**Scenario**: plugin-improve applies bug fix to existing plugin, needs to rebuild
-
-**Invocation**:
-
-- Skill: plugin-improve
-- Phase: 5 (Build & Test)
-- Action: Invoke build-automation (no flags - full build)
-
-**Success Path**:
-
-1. build-automation invokes: `./scripts/build-and-install.sh [PluginName]`
-2. Build and installation succeed
-3. Displays success message
-4. Presents improvement completion menu: "Test changes / Continue improving / Done"
-5. Returns to plugin-improve with status: SUCCESS
-6. plugin-improve continues to Phase 6 (CHANGELOG update)
-
-**Failure Path**:
-
-1. Build fails (regression from bug fix)
-2. Error: "plugins/MyPlugin/Source/PluginProcessor.cpp:142: error: cannot convert 'int' to 'float' in assignment"
-3. build-automation presents 4-option failure menu
-4. User chooses "Investigate"
-5. troubleshooter agent invoked:
-   ```
-   Error: cannot convert 'int' to 'float' in assignment
-   Context: Building plugin "MyPlugin" after bug fix
-   File: PluginProcessor.cpp:142
-   ```
-6. troubleshooter returns report:
-
-   ```
-   ## Research Report: Type Conversion Error
-
-   ### Problem Identified
-   - **Error:** cannot convert 'int' to 'float' in assignment
-   - **Context:** Line 142 attempts to assign integer result to float parameter
-   - **Root Cause:** Changed return type of helper function but didn't update assignment
-
-   ### Research Path
-   Level 0 (Quick Assessment)
-
-   ### Confidence Assessment
-   - **Confidence Level:** HIGH
-   - **Reasoning:** Error message is explicit, solution straightforward
-
-   ### Recommended Solution
-   Cast result to float: `paramValue = static_cast<float>(calculateValue());`
-   Or change calculateValue() return type to float.
-
-   **Why This Works:** Explicit type conversion satisfies compiler type checker.
-   ```
-
-7. User reviews report: "Apply solution"
-8. Code updated with cast
-9. User confirms: "Retry build"
-10. Build succeeds
-11. Returns to plugin-improve with status: SUCCESS
+See complete scenario walkthroughs in `references/integration-examples.md`
 
 ## Error Handling Rules
 
-### Never Auto-Retry
+<critical_rule name="never_auto_retry" enforcement="blocking">
 
-**CRITICAL**: build-automation must NEVER automatically retry a failed build without explicit user decision. Always present failure menu and await user choice.
+**NEVER automatically retry a failed build without explicit user decision.**
 
-Bad (DON'T DO):
+When build fails:
+1. MUST present failure menu (lines 99-112)
+2. MUST await user choice
+3. MUST NOT execute any retry logic autonomously
 
-```
-Build failed. Retrying with different flags...
-```
+Violation consequences: User loses control of workflow, unexpected builds consume resources, debugging becomes impossible.
 
-Good (DO THIS):
+</critical_rule>
 
-```
-⚠️ Build failed
+<state_requirement name="retry_context_preservation">
 
-What would you like to do?
-1. Investigate...
-```
+When user requests build retry after manual fix:
 
-### Preserve Context Between Retries
+MUST preserve from original invocation:
+- Build flags (`--no-install`, `--dry-run`, or none)
+- Invoking skill (plugin-workflow, plugin-improve, manual)
+- Invoking stage (Stage 2, 3, 4, 5, 6, or N/A)
+- Last decision point (for return navigation)
 
-When user says "retry build" after manual fixes:
+Store in skill-local variables at skill entry (line 48).
+Reuse on retry without re-prompting user.
 
-1. Use same flags as original build attempt
-2. Preserve same invoking context (Stage 2, plugin-improve, etc.)
-3. Return to same decision point after success/failure
+</state_requirement>
 
 ### Handle Missing Dependencies
 
@@ -499,99 +256,19 @@ Extract meaningful error information for troubleshooter:
 
 Pass full context to troubleshooter, not just error message.
 
-## Performance Considerations
+## Performance Notes
 
-### Build Duration Tracking
-
-Always display build duration in success/failure messages:
-
-- Start timer before invoking build script
-- Stop timer after exit
-- Format as "Build time: 2m 34s" or "Build time: 45s"
-
-### Log File Management
-
-- Build logs accumulate in `logs/[PluginName]/`
-- Each build creates timestamped log: `build_20250110_143022.log`
-- No automatic cleanup (user can manually delete old logs)
-- Always reference most recent log file
-
-### Parallel Builds
-
-Build script handles parallelization (Ninja builds VST3 + AU simultaneously). build-automation skill doesn't need to manage this - just invoke script and monitor output.
+- **Duration tracking:** Display "Build time: Xm Ys" in all success/failure messages
+- **Log management:** Logs accumulate in `logs/[PluginName]/build_TIMESTAMP.log` (no auto-cleanup)
+- **Parallel builds:** Handled by build script (Ninja), skill only monitors output
 
 ## Testing & Debugging
 
-### Manual Invocation
-
-Skill can be invoked manually for testing:
-
-```
-Please invoke the build-automation skill to build RadioMusic plugin.
-
-Context: Manual test of build system.
-Expected: Full build and installation.
-```
-
-### Simulated Failures
-
-To test failure protocol:
-
-1. Introduce intentional syntax error in plugin source
-2. Invoke build-automation
-3. Verify 4-option menu appears
-4. Test each option (Investigate, Show log, Show code, Wait)
-5. Verify troubleshooter integration works
-6. Fix error and retry
-7. Verify success path works
-
-### Integration Testing
-
-To test workflow integration:
-
-1. Start new plugin workflow: `/implement TestPlugin`
-2. Progress to Stage 2 (Foundation)
-3. Verify build-automation invoked with `--no-install`
-4. Verify success returns to workflow
-5. Progress to Stage 3+ and verify full build invoked
-6. Introduce failure and verify handling
-7. Verify workflow resumes after fix
+See `references/testing-guide.md` for manual testing procedures
 
 ## Common Issues
 
-### Issue: "Build script not found"
-
-**Cause**: build-automation invoked before Phase 4a complete
-
-**Solution**: Verify `scripts/build-and-install.sh` exists and is executable
-
-### Issue: "Log file not created"
-
-**Cause**: `logs/` directory doesn't exist or permissions issue
-
-**Solution**: Build script should create `logs/` directory in Phase 1
-
-### Issue: "troubleshooter returns JSON instead of markdown"
-
-**Cause**: Agent using wrong report format
-
-**Solution**: troubleshooter YAML frontmatter must specify: `output_format: structured_markdown_report`
-
-### Issue: "Build succeeds but plugins not in DAW"
-
-**Cause**: Cache clearing didn't work or DAW already running
-
-**Solution**:
-
-1. Verify Phase 6 executed (cache clearing)
-2. Restart DAW completely (not just rescan)
-3. Check installation paths manually
-
-### Issue: "Retry build uses wrong flags"
-
-**Cause**: Not preserving context between attempts
-
-**Solution**: Store original invocation context (stage, flags) at beginning of skill execution, reuse on retry
+See `references/troubleshooting.md` for common issues and solutions
 
 ## Future Enhancements
 

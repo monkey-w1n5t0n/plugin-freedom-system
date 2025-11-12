@@ -26,10 +26,16 @@ preconditions:
 
 **Check preconditions first:**
 
+<precondition_gate>
+<validation_requirement>
+MUST verify all preconditions before proceeding. If ANY check fails, BLOCK and report to user.
+</validation_requirement>
+
 1. Verify creative brief exists:
 ```bash
 if [ ! -f "plugins/${PLUGIN_NAME}/.ideas/creative-brief.md" ]; then
-    echo "✗ creative-brief.md not found"
+    echo "✗ creative-brief.md not found - SKILL BLOCKED"
+    cat assets/precondition-failed.md
     exit 1
 fi
 ```
@@ -39,8 +45,13 @@ fi
 STATUS=$(grep -A 2 "^### ${PLUGIN_NAME}$" PLUGINS.md | grep "Status:" | awk '{print $2}')
 ```
 
-- If status is 🚧 Stage N where N >= 2: **BLOCK** - Plugin already past planning
-- If status is 💡 Ideated or not found: OK to proceed
+<blocking_condition>
+IF status is 🚧 Stage N where N >= 2:
+  THEN BLOCK with message "Plugin already past planning stage"
+ELSE IF status is 💡 Ideated or not found:
+  THEN Proceed
+</blocking_condition>
+</precondition_gate>
 
 3. Check for existing contracts:
 ```bash
@@ -50,13 +61,24 @@ test -f "plugins/${PLUGIN_NAME}/.ideas/plan.md" && echo "✓ plan.md exists"
 ```
 
 **Resume logic:**
-- If architecture.md exists but plan.md doesn't: Skip to Stage 1
-- If both exist: Ask user if they want to regenerate or proceed to implementation
-- If neither exists: Start at Stage 0
+
+<resume_logic>
+IF architecture.md exists AND plan.md missing:
+  THEN skip to Stage 1
+ELSE IF architecture.md exists AND plan.md exists:
+  THEN ask user: "Both contracts exist. Regenerate or proceed to implementation?"
+ELSE:
+  THEN start at Stage 0
+</resume_logic>
 
 ---
 
 ## Stage 0: Research
+
+<critical_sequence id="stage-0-research">
+<sequence_requirement>
+Execute steps 1-6 in order. Do NOT skip steps. Each step builds on previous.
+</sequence_requirement>
 
 **Goal:** Create DSP architecture specification (architecture.md)
 
@@ -112,37 +134,10 @@ Create `plugins/${PLUGIN_NAME}/.ideas/architecture.md` using the template from `
 **State management:**
 
 1. Create/update `.continue-here.md`:
-```yaml
----
-plugin: [PluginName]
-stage: 0
-status: complete
-last_updated: [YYYY-MM-DD HH:MM:SS]
----
 
-# Resume Point
-
-## Current State: Stage 0 - Research Complete
-
-DSP architecture documented. Ready to proceed to planning.
-
-## Completed So Far
-
-**Stage 0:** ✓ Complete
-- Plugin type defined
-- Professional examples researched
-- DSP feasibility verified
-- Parameter ranges researched
-
-## Next Steps
-
-1. Stage 1: Planning (calculate complexity, create implementation plan)
-2. Review research findings
-3. Pause here
-
-## Files Created
-- plugins/[PluginName]/.ideas/architecture.md
-```
+Create `.continue-here.md` using template from `assets/continue-stage-0-template.md` with variables:
+- `${PLUGIN_NAME}` - Plugin name
+- `${TIMESTAMP}` - Current timestamp
 
 2. Update PLUGINS.md status to `🚧 Stage 0` and add timeline entry
 
@@ -161,30 +156,28 @@ EOF
 
 **Decision menu (numbered format):**
 
-```
-✓ Stage 0 complete: DSP architecture documented
+Display menu from `assets/decision-menu-stage-0.md`
 
-What's next?
-1. Continue to Stage 1 - Planning (recommended)
-2. Review architecture.md findings
-3. Improve creative brief based on research
-4. Run deeper JUCE investigation (deep-research skill) ← Discover troubleshooting
-5. Pause here
-6. Other
+<user_input_handling>
+Wait for user response:
+- Numeric 1-6: Execute option
+- Keywords: "continue"→1, "pause"→5, "review"→2
+- Other: Re-present menu
+</user_input_handling>
 
-Choose (1-6): _
-```
-
-Wait for user input. Handle:
-- Number (1-6): Execute corresponding option
-- "continue" keyword: Execute option 1
-- "pause" keyword: Execute option 5
-- "review" keyword: Execute option 2
-- "other": Ask "What would you like to do?" then re-present menu
+<checkpoint_requirement>
+After completing step 6, MUST commit changes and present decision menu. Do NOT auto-proceed.
+</checkpoint_requirement>
+</critical_sequence>
 
 ---
 
 ## Stage 1: Planning
+
+<critical_sequence id="stage-1-planning">
+<sequence_requirement>
+Execute steps 1-8 in order. Do NOT skip steps. Complexity calculation must precede plan generation.
+</sequence_requirement>
 
 **Goal:** Calculate complexity and create implementation plan (plan.md)
 
@@ -192,47 +185,28 @@ Wait for user input. Handle:
 
 **Preconditions:**
 
+<decision_gate id="stage-1-contract-validation">
+<validation_requirement>
+MUST verify parameter-spec.md AND architecture.md exist before proceeding. This is a BLOCKING gate.
+</validation_requirement>
+
 Check for required contracts:
 ```bash
-test -f "plugins/${PLUGIN_NAME}/.ideas/parameter-spec.md" && echo "✓ parameter-spec.md" || echo "✗ parameter-spec.md MISSING"
-test -f "plugins/${PLUGIN_NAME}/.ideas/architecture.md" && echo "✓ architecture.md" || echo "✗ architecture.md MISSING"
+PARAM_SPEC_EXISTS=$(test -f "plugins/${PLUGIN_NAME}/.ideas/parameter-spec.md" && echo "true" || echo "false")
+ARCH_EXISTS=$(test -f "plugins/${PLUGIN_NAME}/.ideas/architecture.md" && echo "true" || echo "false")
+
+echo "Parameter spec: ${PARAM_SPEC_EXISTS}"
+echo "Architecture: ${ARCH_EXISTS}"
 ```
 
-**If parameter-spec.md OR architecture.md is missing:**
-
-STOP IMMEDIATELY and BLOCK with this message:
-
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✗ BLOCKED: Cannot proceed to Stage 1
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Missing implementation contracts:
-
-Required contracts:
-✓ creative-brief.md - exists
-[✓/✗] parameter-spec.md - [exists/MISSING (required)]
-[✓/✗] architecture.md - [exists/MISSING (required)]
-
-WHY BLOCKED:
-Stage 1 planning requires complete specifications to prevent implementation
-drift. These contracts are the single source of truth.
-
-HOW TO UNBLOCK:
-1. parameter-spec.md: Complete ui-mockup two-phase workflow
-   - Run: /dream [PluginName]
-   - Choose: "Create UI mockup"
-   - Design UI and finalize (Phase 4.5)
-   - Finalization generates parameter-spec.md
-
-2. architecture.md: Create DSP architecture specification
-   - Run Stage 0 (Research) to generate architecture.md
-   - Document DSP components and processing chain
-   - Map parameters to DSP components
-   - Save to plugins/[PluginName]/.ideas/architecture.md
-
-Once both contracts exist, Stage 1 will proceed.
-```
+<blocking_condition>
+IF PARAM_SPEC_EXISTS == "false" OR ARCH_EXISTS == "false":
+  THEN display error message (see assets/stage-1-blocked.md)
+  AND exit skill
+ELSE:
+  Proceed to complexity calculation
+</blocking_condition>
+</decision_gate>
 
 Exit skill and wait for user to create contracts.
 
@@ -304,40 +278,13 @@ Create `plugins/${PLUGIN_NAME}/.ideas/plan.md` using the template from `assets/p
 **State management:**
 
 1. Update `.continue-here.md`:
-```yaml
----
-plugin: [PluginName]
-stage: 1
-status: complete
-last_updated: [YYYY-MM-DD HH:MM:SS]
-complexity_score: [X.X]
-phased_implementation: [true/false]
----
 
-# Resume Point
-
-## Current State: Stage 1 - Planning Complete
-
-Implementation plan created. Ready to proceed to foundation (Stage 2).
-
-## Completed So Far
-
-**Stage 0:** ✓ Complete
-**Stage 1:** ✓ Complete
-- Complexity score: [X.X]
-- Strategy: [Single-pass | Phased implementation]
-- Plan documented
-
-## Next Steps
-
-1. Stage 2: Foundation (create build system)
-2. Review plan details
-3. Pause here
-
-## Files Created
-- plugins/[PluginName]/.ideas/architecture.md
-- plugins/[PluginName]/.ideas/plan.md
-```
+Create `.continue-here.md` using template from `assets/continue-stage-1-template.md` with variables:
+- `${PLUGIN_NAME}` - Plugin name
+- `${TIMESTAMP}` - Current timestamp
+- `${COMPLEXITY_SCORE}` - Calculated complexity score
+- `${PHASED_IMPLEMENTATION}` - true/false
+- `${IMPLEMENTATION_STRATEGY}` - "Single-pass" or "Phased implementation"
 
 2. Update PLUGINS.md status to `🚧 Stage 1` and add timeline entry
 
@@ -359,66 +306,65 @@ EOF
 
 **Decision menu (numbered format):**
 
-```
-✓ Stage 1 complete: Implementation plan created (Complexity [X.X], [single-pass/phased])
+Display menu from `assets/decision-menu-stage-1.md`
 
-What's next?
-1. Continue to Stage 2 - Foundation (via /implement) (recommended)
-2. Review plan.md details
-3. Adjust complexity assessment
-4. Review contracts (parameter-spec, architecture) ← Discover design-sync
-5. Pause here
-6. Other
+<user_input_handling>
+Wait for user response:
+- Numeric 1-6: Execute option
+- Keywords: "continue"→1, "pause"→5, "review"→2
+- Other: Re-present menu
+</user_input_handling>
 
-Choose (1-6): _
-```
-
-Wait for user input. Handle:
-- Number (1-6): Execute corresponding option
-- "continue" keyword: Execute option 1
-- "pause" keyword: Execute option 5
-- "review" keyword: Execute option 2
-- "other": Ask "What would you like to do?" then re-present menu
+<checkpoint_requirement>
+After completing step 8, MUST commit changes and present decision menu. Do NOT auto-proceed.
+</checkpoint_requirement>
+</critical_sequence>
 
 ---
 
 ## Handoff to Implementation
 
+<handoff_protocol id="planning-to-implementation">
+<state_requirement>
+CRITICAL: Handoff modifies .continue-here.md location. Execute steps EXACTLY in sequence. File path precision is critical.
+</state_requirement>
+
 **When user chooses to proceed to Stage 2:**
 
-1. **Delete planning handoff** to prevent confusion (two `.continue-here.md` files):
+<critical_sequence>
+1. Delete planning handoff (prevents dual state files):
 ```bash
 rm plugins/${PLUGIN_NAME}/.ideas/.continue-here.md
+if [ $? -ne 0 ]; then
+    echo "✗ Failed to delete planning handoff"
+    exit 1
+fi
 ```
 
-2. **Create implementation handoff** at root that plugin-workflow skill expects:
-
+2. Create implementation handoff at plugin root:
 ```bash
-# Create at plugins/[PluginName]/.continue-here.md (NOT in .ideas/)
+# IMPORTANT: Create at plugins/${PLUGIN_NAME}/.continue-here.md (NOT in .ideas/)
+# Use template from assets/implementation-handoff-template.md
+cat > plugins/${PLUGIN_NAME}/.continue-here.md <<'EOF'
+[template content from assets/implementation-handoff-template.md]
+EOF
 ```
 
-```yaml
----
-plugin: [PluginName]
-stage: 1
-status: complete
-last_updated: [YYYY-MM-DD HH:MM:SS]
-complexity_score: [X.X]
-phased_implementation: [true/false]
-next_stage: 2
-ready_for_implementation: true
----
-
-# Ready for Implementation
-
-Planning complete. All contracts created:
-- ✓ creative-brief.md
-- ✓ parameter-spec.md
-- ✓ architecture.md
-- ✓ plan.md
-
-Run `/implement [PluginName]` to begin Stage 2 (Foundation).
+3. Verify handoff:
+```bash
+test ! -f "plugins/${PLUGIN_NAME}/.ideas/.continue-here.md" || { echo "✗ Old handoff still exists"; exit 1; }
+test -f "plugins/${PLUGIN_NAME}/.continue-here.md" || { echo "✗ New handoff not created"; exit 1; }
+echo "✓ Handoff verified"
 ```
+</critical_sequence>
+
+<verification_step>
+After handoff, verify:
+- plugins/[PluginName]/.ideas/.continue-here.md does NOT exist
+- plugins/[PluginName]/.continue-here.md DOES exist
+- PLUGINS.md status updated to 🚧 Stage 2
+</verification_step>
+</handoff_protocol>
 
 Display to user:
 

@@ -1,10 +1,10 @@
 ---
 name: troubleshooting-docs
-description: Capture problem solutions in searchable knowledge base
+description: Capture solved problems as categorized documentation with YAML frontmatter for fast lookup
 allowed-tools:
   - Read # Parse conversation context
   - Write # Create resolution docs
-  - Bash # Create symlinks for dual-indexing
+  - Bash # Create directories
   - Grep # Search existing docs
 preconditions:
   - Problem has been solved (not in-progress)
@@ -17,21 +17,17 @@ preconditions:
 
 ## Overview
 
-This skill captures problem solutions immediately after confirmation, creating structured documentation that serves as a searchable knowledge base for future sessions. Documentation is dual-indexed: organized by plugin name AND by symptom category, enabling fast lookup from multiple entry points.
+This skill captures problem solutions immediately after confirmation, creating structured documentation that serves as a searchable knowledge base for future sessions.
 
-**Why dual-indexing matters:**
-
-When researching problems, you might know the plugin name OR the symptom, but not both:
-
-- "What build issues has DelayPlugin had?" → Search by-plugin/DelayPlugin/
-- "What causes parameter validation failures?" → Search by-symptom/validation-problems/
-
-Both paths lead to the same documentation (via symlinks).
+**Organization:** Single-file architecture - each problem documented as one markdown file in its symptom category directory (e.g., `troubleshooting/build-failures/cmake-version-mismatch.md`). Files use YAML frontmatter for metadata and searchability.
 
 ---
 
+<critical_sequence name="documentation-capture" enforce_order="strict">
+
 ## 7-Step Process
 
+<step number="1" required="true">
 ### Step 1: Detect Confirmation
 
 **Auto-invoke after phrases:**
@@ -56,7 +52,9 @@ Both paths lead to the same documentation (via symlinks).
 - Simple typos
 - Obvious syntax errors
 - Trivial fixes immediately corrected
+</step>
 
+<step number="2" required="true" depends_on="1">
 ### Step 2: Gather Context
 
 Extract from conversation history:
@@ -77,7 +75,7 @@ Extract from conversation history:
 - OS version
 - File/line references
 
-**Ask user if missing critical context:**
+**BLOCKING REQUIREMENT:** If critical context is missing (plugin name, exact error, stage, or resolution steps), ask user and WAIT for response before proceeding to Step 3:
 
 ```
 I need a few details to document this properly:
@@ -88,7 +86,9 @@ I need a few details to document this properly:
 
 [Continue after user provides details]
 ```
+</step>
 
+<step number="3" required="false" depends_on="2">
 ### Step 3: Check Existing Docs
 
 Search troubleshooting/ for similar issues:
@@ -98,23 +98,32 @@ Search troubleshooting/ for similar issues:
 grep -r "exact error phrase" troubleshooting/
 
 # Search by symptom category
-ls troubleshooting/by-symptom/[category]/
+ls troubleshooting/[category]/
 ```
 
-**If similar issue found:**
+**IF similar issue found:**
 
-Present options:
+THEN present decision options:
 
 ```
-Found similar issue: troubleshooting/by-plugin/OtherPlugin/build-failures/similar-issue.md
+Found similar issue: troubleshooting/[path]
 
 What's next?
 1. Create new doc with cross-reference (recommended)
-2. Update existing doc - Add this case as variant
-3. Link as duplicate - Don't create new doc
-4. Other
+2. Update existing doc (only if same root cause)
+3. Other
+
+Choose (1-3): _
 ```
 
+WAIT for user response, then execute chosen action.
+
+**ELSE** (no similar issue found):
+
+Proceed directly to Step 4 (no user interaction needed).
+</step>
+
+<step number="4" required="true" depends_on="2">
 ### Step 4: Generate Filename
 
 Format: `[sanitized-symptom]-[plugin]-[YYYYMMDD].md`
@@ -131,57 +140,17 @@ Format: `[sanitized-symptom]-[plugin]-[YYYYMMDD].md`
 - `missing-juce-dsp-module-DelayPlugin-20251110.md`
 - `parameter-not-saving-state-ReverbPlugin-20251110.md`
 - `webview-crash-on-resize-TapeAgePlugin-20251110.md`
+</step>
 
+<step number="5" required="true" depends_on="4" blocking="true">
 ### Step 5: Validate YAML Schema
 
 **CRITICAL:** All docs require validated YAML frontmatter with enum validation.
 
-**Load schema:**
-```bash
-cat .claude/skills/troubleshooting-docs/schema.yaml
-```
+<validation_gate name="yaml-schema" blocking="true">
 
-**Classify the problem:**
-- Which `problem_type` enum value? (build_error, runtime_error, ui_layout, etc.)
-- Which `component` enum value? (cmake, juce_gui_basics, juce_dsp, etc.)
-- What are specific `symptoms`? (exact error messages, observable behavior)
-- What's the `root_cause` enum value? (missing_module, missing_constraint, etc.)
-- What `resolution_type`? (code_fix, config_change, etc.)
-- What `severity`? (critical, moderate, minor)
-- What searchable `tags`? (lowercase, hyphenated keywords)
-
-**Required fields:**
-- ✅ `plugin` - String (plugin name or "JUCE")
-- ✅ `date` - String (YYYY-MM-DD format)
-- ✅ `problem_type` - Enum from schema
-- ✅ `component` - Enum from schema
-- ✅ `symptoms` - Array (1-5 items)
-- ✅ `root_cause` - Enum from schema
-- ✅ `resolution_type` - Enum from schema
-- ✅ `severity` - Enum from schema
-
-**Optional fields:**
-- `juce_version` - String (X.Y.Z format)
-- `tags` - Array of strings
-
-**Validation process:**
-
-```bash
-# Verify enum values against schema
-# problem_type must be in: build_error, runtime_error, api_misuse, validation_failure,
-#   ui_layout, dsp_issue, state_management, performance, thread_violation
-
-# component must be in: cmake, juce_processor, juce_editor, juce_dsp, juce_gui_basics,
-#   juce_audio_utils, apvts, pluginval, xcode, system, webview
-
-# root_cause must be in: missing_framework, missing_module, wrong_api, thread_violation,
-#   missing_constraint, state_sync, memory_issue, config_error, version_incompatibility,
-#   logic_error, event_timing, url_protocol
-
-# resolution_type must be in: code_fix, config_change, environment_setup, api_migration
-
-# severity must be in: critical, moderate, minor
-```
+**Validate against schema:**
+Load `schema.yaml` and classify the problem against the enum values defined in `references/yaml-schema.md`. Ensure all required fields are present and match allowed values exactly.
 
 **BLOCK if validation fails:**
 
@@ -196,23 +165,15 @@ Errors:
 Please provide corrected values.
 ```
 
-Present retry with corrected values, don't proceed until valid.
+**GATE ENFORCEMENT:** Do NOT proceed to Step 6 (Create Documentation) until YAML frontmatter passes all validation rules defined in `schema.yaml`.
 
+</validation_gate>
+</step>
+
+<step number="6" required="true" depends_on="5">
 ### Step 6: Create Documentation
 
-**Determine category from problem_type enum:**
-
-Category mapping (based on validated `problem_type` field):
-
-- `build_error` → troubleshooting/build-failures/
-- `runtime_error` → troubleshooting/runtime-issues/
-- `ui_layout` → troubleshooting/gui-issues/
-- `api_misuse` → troubleshooting/api-usage/
-- `dsp_issue` → troubleshooting/dsp-issues/
-- `state_management` → troubleshooting/parameter-issues/
-- `performance` → troubleshooting/runtime-issues/
-- `thread_violation` → troubleshooting/runtime-issues/
-- `validation_failure` → troubleshooting/validation-problems/
+**Determine category from problem_type:** Use the category mapping defined in `references/yaml-schema.md` (lines 49-61).
 
 **Create documentation file:**
 
@@ -225,46 +186,18 @@ DOC_PATH="troubleshooting/${CATEGORY}/${FILENAME}"
 # Create directory if needed
 mkdir -p "troubleshooting/${CATEGORY}"
 
-# Write documentation using template
-cat > "$DOC_PATH" << 'EOF'
----
-plugin: [PluginName or "JUCE"]
-date: [YYYY-MM-DD]
-problem_type: [validated enum value]
-component: [validated enum value]
-symptoms:
-  - [Observable symptom 1]
-  - [Observable symptom 2]
-root_cause: [validated enum value]
-resolution_type: [validated enum value]
-severity: [validated enum value]
-tags: [keywords]
----
-
-[Documentation content from template]
-EOF
+# Write documentation using template from assets/resolution-template.md
+# (Content populated with Step 2 context and validated YAML frontmatter)
 ```
 
 **Result:**
-- Single file in category directory (no symlinks)
+- Single file in category directory
 - Enum validation ensures consistent categorization
-- Searchable by category, plugin, component, root_cause
 
-**Documentation template:**
+**Create documentation:** Populate the structure from `assets/resolution-template.md` with context gathered in Step 2 and validated YAML frontmatter from Step 5.
+</step>
 
-Use template from `assets/resolution-template.md` with populated values:
-
-- YAML frontmatter with validated fields
-- Problem title (descriptive)
-- Symptom section (exact errors, observable behavior)
-- Context section (plugin, stage, JUCE version, OS)
-- Investigation steps tried (what didn't work and why)
-- Root cause (technical explanation)
-- Solution (step-by-step fix with code examples)
-- Prevention (how to avoid)
-- Related issues (cross-references if found in Step 3)
-- References (JUCE docs, forum threads, external resources)
-
+<step number="7" required="false" depends_on="6">
 ### Step 7: Cross-Reference & Critical Pattern Detection
 
 If similar issues found in Step 3:
@@ -316,42 +249,24 @@ But **NEVER auto-promote**. User decides via decision menu (Option 2).
 
 **Template for critical pattern addition:**
 
-When user selects Option 2 (Add to Required Reading):
+When user selects Option 2 (Add to Required Reading), use the template from `assets/critical-pattern-template.md` to structure the pattern entry. Number it sequentially based on existing patterns in `troubleshooting/patterns/juce8-critical-patterns.md`.
+</step>
 
-```markdown
-## N. [Pattern Name] (ALWAYS REQUIRED)
-
-### ❌ WRONG ([Will cause X error])
-```[language]
-[code showing wrong approach]
-```
-
-### ✅ CORRECT
-```[language]
-[code showing correct approach]
-```
-
-**Why:** [Technical explanation of why this is required]
-
-**Placement/Context:** [When this applies]
-
-**Documented in:** `troubleshooting/[category]/[filename].md`
+</critical_sequence>
 
 ---
-```
 
----
+<decision_gate name="post-documentation" wait_for_user="true">
 
 ## Decision Menu After Capture
 
-After successful documentation:
+After successful documentation, present options and WAIT for user response:
 
 ```
 ✓ Solution documented
 
 File created:
-- Real: troubleshooting/by-plugin/[Plugin]/[category]/[filename].md
-- Symlink: troubleshooting/by-symptom/[category]/[filename].md
+- troubleshooting/[category]/[filename].md
 
 What's next?
 1. Continue workflow (recommended)
@@ -405,54 +320,43 @@ Action:
 
 - Ask what they'd like to do
 
+</decision_gate>
+
 ---
+
+<integration_protocol>
 
 ## Integration Points
 
 **Invoked by:**
-
-- Auto-detection after success phrases
-- `/doc-fix` command
-- Any skill after solution confirmation
-- Manual: "document this solution"
+- deep-research skill (after solution found)
+- plugin-improve skill (after fix validated)
+- Manual invocation via /doc-fix command
 
 **Invokes:**
+- None (terminal skill - does not delegate to other skills)
 
-- None (terminal skill)
+**Handoff expectations:**
+All context needed for documentation should be present in conversation history before invocation.
 
-**Reads:**
-
-- Conversation history (for context extraction)
-- `PLUGINS.md` (validate plugin name)
-- `troubleshooting/` (search existing docs)
-- `assets/resolution-template.md` (documentation template)
-- `references/yaml-schema.md` (validation rules)
-
-**Creates:**
-
-- `troubleshooting/by-plugin/[Plugin]/[category]/[filename].md` (real file)
-- `troubleshooting/by-symptom/[category]/[filename].md` (symlink)
-- Updates to `troubleshooting/patterns/common-solutions.md` (if pattern detected)
-
-**Updates:**
-
-- Existing docs (cross-references)
-- Pattern library (if applicable)
+</integration_protocol>
 
 ---
 
+<success_criteria>
+
 ## Success Criteria
 
-Documentation is successful when:
+Documentation is successful when ALL of the following are true:
 
 - ✅ YAML frontmatter validated (all required fields, correct formats)
-- ✅ Real file created in troubleshooting/by-plugin/[Plugin]/[category]/
-- ✅ Symlink created in troubleshooting/by-symptom/[category]/
-- ✅ Documentation follows template structure
-- ✅ All sections populated with relevant content
-- ✅ Code examples included (if applicable)
-- ✅ Cross-references added (if similar issues exist)
-- ✅ File is searchable (descriptive filename, tags)
+- ✅ File created in troubleshooting/[category]/[filename].md
+- ✅ Enum values match schema.yaml exactly
+- ✅ Code examples included in solution section
+- ✅ Cross-references added if related issues found
+- ✅ User presented with decision menu and action confirmed
+
+</success_criteria>
 
 ---
 
@@ -469,12 +373,6 @@ Documentation is successful when:
 - Present retry with corrected values
 - BLOCK until valid
 
-**Symlink creation failure (Windows):**
-
-- Detect if `ln -s` fails
-- Fallback: Duplicate file instead of symlink
-- Warn user: "Symlinks not supported, using file duplication"
-
 **Similar issue ambiguity:**
 
 - Present multiple matches
@@ -488,27 +386,19 @@ Documentation is successful when:
 
 ---
 
-## Notes for Claude
+## Execution Guidelines
 
-**When executing this skill:**
+**MUST do:**
+- Validate YAML frontmatter (BLOCK if invalid per Step 5 validation gate)
+- Extract exact error messages from conversation
+- Include code examples in solution section
+- Create directories before writing files (`mkdir -p`)
+- Ask user and WAIT if critical context missing
 
-1. Always validate YAML frontmatter - BLOCK if invalid
-2. Use relative symlinks (../../by-plugin/...) not absolute paths
-3. Extract exact error messages from conversation
-4. Include code examples in solution section
-5. Cross-reference similar issues automatically
-6. Category detection is automatic from tags
-7. Ask user if critical context missing
-8. Be specific in documentation (exact file:line, versions)
-
-**Common pitfalls:**
-
-- Forgetting to create directories before writing files
-- Using absolute symlink paths (breaks portability)
-- Missing YAML validation (creates invalid docs)
-- Vague descriptions (not searchable)
-- No code examples (harder to understand solution)
-- No cross-references (knowledge stays siloed)
+**MUST NOT do:**
+- Skip YAML validation (validation gate is blocking)
+- Use vague descriptions (not searchable)
+- Omit code examples or cross-references
 
 ---
 
@@ -561,8 +451,7 @@ Documentation is successful when:
    ```
    ✅ Valid
 6. **Create documentation:**
-   - Real: `troubleshooting/by-plugin/ReverbPlugin/parameter-issues/parameter-not-saving-decay-ReverbPlugin-20251110.md`
-   - Symlink: `troubleshooting/by-symptom/parameter-issues/parameter-not-saving-decay-ReverbPlugin-20251110.md`
+   - `troubleshooting/parameter-issues/parameter-not-saving-decay-ReverbPlugin-20251110.md`
 7. **Cross-reference:** None needed (no similar issues)
 
 **Output:**
@@ -571,15 +460,15 @@ Documentation is successful when:
 ✓ Solution documented
 
 File created:
-- Real: troubleshooting/by-plugin/ReverbPlugin/parameter-issues/parameter-not-saving-decay-ReverbPlugin-20251110.md
-- Symlink: troubleshooting/by-symptom/parameter-issues/parameter-not-saving-decay-ReverbPlugin-20251110.md
+- troubleshooting/parameter-issues/parameter-not-saving-decay-ReverbPlugin-20251110.md
 
 What's next?
 1. Continue workflow (recommended)
-2. Link related issues
-3. Update common patterns
-4. View documentation
-5. Other
+2. Add to Required Reading - Promote to critical patterns (juce8-critical-patterns.md)
+3. Link related issues - Connect to similar problems
+4. Update common patterns - Add to pattern library
+5. View documentation - See what was captured
+6. Other
 ```
 
 ---

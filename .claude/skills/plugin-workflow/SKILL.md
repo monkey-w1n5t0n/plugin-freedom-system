@@ -29,73 +29,145 @@ This skill orchestrates plugin implementation stages 2-6. Stages 0-1 (Research &
 - **Stage 5:** GUI - Integrate WebView UI with parameter bindings (gui-agent)
 - **Stage 6:** Validation - Factory presets, pluginval, CHANGELOG (direct or validator)
 
-**CRITICAL ORCHESTRATION RULES:**
-1. Stages 2-5 MUST use Task tool to invoke subagents - NEVER implement directly
-2. After EVERY subagent return (whether full stage or phase completion), orchestrator MUST:
-   - Commit all changes with git
-   - Update .continue-here.md with current state
-   - Update PLUGINS.md status
-   - Update plan.md if phased implementation
-   - Present numbered decision menu
-   - WAIT for user response
+<orchestration_rules enforcement_level="STRICT">
+  <delegation_rule
+    id="subagent-dispatch-only"
+    stages="2-5"
+    tool="Task"
+    violation="IMMEDIATE_STOP">
 
-   This applies to:
-   - Simple plugins (complexity ≤2): After each stage completion (2, 3, 4, 5, 6)
-   - Complex plugins (complexity ≥3): After stages 2, 3 AND after EACH DSP/GUI phase (4.1, 4.2, 4.3+, 5.1, 5.2, 5.3+), then 6
+    Stages 2-5 MUST be delegated to subagents via Task tool.
+    This skill is a PURE ORCHESTRATOR - it NEVER implements plugin code directly.
 
-   Note: Number of phases determined by plan.md - could be 4.1-4.2, or 4.1-4.3, or more depending on complexity
+    <enforcement>
+      IF stage in [2,3,4,5] AND action != "invoke_subagent_via_Task":
+        STOP execution
+        DISPLAY error: "Stage {stage} requires subagent delegation. Use Task tool to invoke {subagent_name}."
+    </enforcement>
 
-3. Stage 6 can run directly in orchestrator or via validator subagent
-4. All subagents receive Required Reading (juce8-critical-patterns.md) to prevent repeat mistakes
-5. Subagents NEVER commit - they only implement and return JSON report
+    <valid_delegations>
+      - Stage 2: foundation-agent
+      - Stage 3: shell-agent
+      - Stage 4: dsp-agent
+      - Stage 5: gui-agent
+    </valid_delegations>
+
+    Stage 6 can optionally run directly in orchestrator or via validator subagent.
+  </delegation_rule>
+
+  <checkpoint_protocol
+    id="stage-completion-checkpoint"
+    frequency="after_every_subagent"
+    auto_proceed="NEVER"
+    violation="WORKFLOW_CORRUPTION">
+
+    After EVERY subagent return (whether full stage or phase completion), orchestrator MUST execute checkpoint sequence.
+
+    <critical_sequence enforce_order="true">
+      <step order="1" required="true">Commit all changes with git</step>
+      <step order="2" required="true">Update .continue-here.md with current state</step>
+      <step order="3" required="true">Update PLUGINS.md status</step>
+      <step order="4" required="true">Update plan.md if phased implementation</step>
+      <step order="5" required="true">Present numbered decision menu</step>
+      <step order="6" required="true" blocking="true">WAIT for user response</step>
+    </critical_sequence>
+
+    <enforcement>
+      All 6 steps must complete in order before proceeding.
+      Step 6 is blocking - NEVER auto-proceed to next stage.
+    </enforcement>
+
+    <applies_to>
+      - Simple plugins (complexity ≤2): After stages 2, 3, 4, 5, 6
+      - Complex plugins (complexity ≥3): After stages 2, 3 AND after EACH DSP/GUI phase (4.1, 4.2, 4.3+, 5.1, 5.2, 5.3+), then 6
+
+      Note: Phase count determined by plan.md (varies by complexity)
+    </applies_to>
+  </checkpoint_protocol>
+
+  <handoff_protocol id="subagent-orchestrator-handoff">
+    Subagents NEVER commit - they only implement and return JSON report.
+    Orchestrator handles all state management and git operations.
+
+    <handoff_format>
+      Subagent returns JSON:
+      {
+        "status": "success" | "error",
+        "stage": 2-6,
+        "completionStatement": "...",
+        "filesCreated": [...],
+        "nextSteps": [...]
+      }
+    </handoff_format>
+  </handoff_protocol>
+
+  <state_requirement id="required-reading-injection">
+    All subagents (stages 2-5) MUST receive Required Reading file to prevent repeat mistakes.
+
+    <enforcement>
+      BEFORE invoking subagent via Task tool:
+      1. Read troubleshooting/patterns/juce8-critical-patterns.md
+      2. Inject content into subagent prompt
+      3. Verify injection succeeded
+    </enforcement>
+  </state_requirement>
+</orchestration_rules>
 
 Each stage is fully documented in its own reference file in `references/` subdirectory.
 
-## Precondition Checking
+<preconditions blocking="true">
+  <contract_verification required="true" blocking="true">
+    Before starting Stage 2, verify these contract files exist:
 
-**Before starting, verify contracts from plugin-planning:**
+    <required_file path="plugins/$PLUGIN_NAME/.ideas/architecture.md" created_by="Stage 0" />
+    <required_file path="plugins/$PLUGIN_NAME/.ideas/plan.md" created_by="Stage 1" />
+    <required_file path="plugins/$PLUGIN_NAME/.ideas/creative-brief.md" created_by="ideation" />
 
-1. Check for required contract files:
+    <on_missing_files action="BLOCK">
+      Display error message:
+      "[PluginName] is missing required planning documents.
 
-```bash
-test -f "plugins/$PLUGIN_NAME/.ideas/architecture.md"
-test -f "plugins/$PLUGIN_NAME/.ideas/plan.md"
-test -f "plugins/$PLUGIN_NAME/.ideas/creative-brief.md"
-```
+      Missing files will be listed here:
+      - architecture.md (from Stage 0)
+      - plan.md (from Stage 1)
+      - creative-brief.md (from ideation)
 
-If any missing, BLOCK with message:
+      Run /plan [PluginName] to complete planning stages 0-1."
+    </on_missing_files>
 
-```
-[PluginName] is missing required planning documents.
+    See [references/precondition-checks.md](references/precondition-checks.md) for bash implementation.
+  </contract_verification>
 
-Missing files will be listed here:
-- architecture.md (from Stage 0)
-- plan.md (from Stage 1)
-- creative-brief.md (from ideation)
+  <status_verification required="true" blocking="true">
+    Read PLUGINS.md and verify status is appropriate:
 
-Run /plan [PluginName] to complete planning stages 0-1.
-```
+    <allowed_state status="🚧 Stage 1">
+      OK to proceed (just finished planning)
+    </allowed_state>
 
-2. Read PLUGINS.md to verify status:
+    <allowed_state status="🚧 Stage N" condition="N >= 2">
+      OK to proceed (resuming implementation)
+    </allowed_state>
 
-```bash
-grep "^### $PLUGIN_NAME$" PLUGINS.md
-```
+    <blocked_state status="💡 Ideated">
+      BLOCK with message:
+      "[PluginName] needs planning before implementation.
+      Run /plan [PluginName] to complete stages 0-1."
+    </blocked_state>
 
-3. Verify status is appropriate:
+    <blocked_state status="✅ Working">
+      BLOCK with message:
+      "[PluginName] is already complete.
+      Use /improve [PluginName] to make changes."
+    </blocked_state>
 
-   - If status = 🚧 Stage 1 → OK to proceed (just finished planning)
-   - If status = 🚧 Stage N (N ≥ 2) → OK to proceed (resuming implementation)
-   - If status = 💡 Ideated → BLOCK with message:
-     ```
-     [PluginName] needs planning before implementation.
-     Run /plan [PluginName] to complete stages 0-1.
-     ```
-   - If status = ✅ Working or 📦 Installed → BLOCK with message:
-     ```
-     [PluginName] is already complete.
-     Use /improve [PluginName] to make changes.
-     ```
+    <blocked_state status="📦 Installed">
+      BLOCK with message:
+      "[PluginName] is already complete.
+      Use /improve [PluginName] to make changes."
+    </blocked_state>
+  </status_verification>
+</preconditions>
 
 ---
 
@@ -103,35 +175,28 @@ grep "^### $PLUGIN_NAME$" PLUGINS.md
 
 **Purpose:** Handle workflow resume from .continue-here.md handoff file.
 
-**When invoked via context-resume skill or /continue command:**
+<decision_gate type="resume_or_fresh_start">
+  <condition check="handoff_file_exists">
+    IF plugins/${PLUGIN_NAME}/.continue-here.md exists:
+      - Parse YAML frontmatter
+      - Extract current_stage, next_action, next_phase
+      - Resume at specified stage/phase
+    ELSE:
+      - Start fresh at Stage 2
+      - No handoff context available
+  </condition>
 
-1. **Check if handoff file exists:**
-   ```bash
-   if [ ! -f "plugins/${PLUGIN_NAME}/.continue-here.md" ]; then
-       echo "No handoff file found. Starting fresh at Stage 2."
-       CURRENT_STAGE=2
-   fi
-   ```
+  <routing_logic>
+    Based on current_stage value:
+    - Stage 2 → invoke foundation-agent
+    - Stage 3 → invoke shell-agent
+    - Stage 4 → invoke dsp-agent
+    - Stage 5 → invoke gui-agent
+    - Stage 6 → execute validation
 
-2. **Parse handoff metadata:**
-   ```bash
-   CURRENT_STAGE=$(grep "^stage:" plugins/${PLUGIN_NAME}/.continue-here.md | awk '{print $2}')
-   NEXT_ACTION=$(grep "^next_action:" plugins/${PLUGIN_NAME}/.continue-here.md | awk '{print $2}')
-   NEXT_PHASE=$(grep "^next_phase:" plugins/${PLUGIN_NAME}/.continue-here.md | awk '{print $2}')
-   ```
-
-3. **Determine resume behavior:**
-   - If CURRENT_STAGE in [2, 3, 4, 5]: Invoke appropriate subagent via Task tool
-   - If CURRENT_STAGE = 6: Execute validation (can be direct or via validator)
-   - If NEXT_ACTION is set: Use it to determine which subagent to invoke
-   - If NEXT_PHASE is set: Resume phased implementation at specified phase
-
-4. **Always use orchestration pattern:**
-   - Read next_action to determine subagent
-   - Invoke subagent using Task tool
-   - Wait for completion
-   - Commit, update state, present decision menu
-   - DO NOT implement directly in orchestrator context
+    If next_phase is set: Resume phased implementation at specified phase.
+  </routing_logic>
+</decision_gate>
 
 ---
 
@@ -141,13 +206,9 @@ grep "^### $PLUGIN_NAME$" PLUGINS.md
 
 **Entry point:** Called by /implement command or /continue command after plugin-planning completes.
 
-### CRITICAL RULE: Never Implement Directly
-
-**This skill is a PURE ORCHESTRATOR:**
-- Stages 2-5 MUST be delegated to subagents
-- NEVER write plugin code directly in this skill
-- ALWAYS use Task tool to invoke subagents
-- Only Stage 6 validation can optionally run directly
+<enforcement_reminder ref="subagent-dispatch-only" severity="CRITICAL">
+This orchestrator MUST NEVER implement plugin code directly. ALL stages 2-5 MUST be delegated via Task tool.
+</enforcement_reminder>
 
 ### Implementation
 
@@ -170,107 +231,87 @@ fi
 
 See `references/state-management.md` for `checkStagePreconditions()` function.
 
-3. **Route to subagent invocation (NEVER direct implementation):**
+<dispatcher_pattern>
+  The orchestrator routes stages to subagents using this logic:
 
-```javascript
-async function dispatchStage(pluginName, stageNumber) {
-  // Check preconditions
-  const preconditionCheck = checkStagePreconditions(pluginName, stageNumber)
+  1. Check preconditions → If failed, BLOCK with reason
+  2. Route to subagent based on stage number:
+     - Stage 2 → foundation-agent
+     - Stage 3 → shell-agent
+     - Stage 4 → dsp-agent
+     - Stage 5 → gui-agent
+     - Stage 6 → validator (or direct execution)
+  3. Pass contracts and Required Reading to subagent
+  4. Wait for subagent completion
 
-  if (!preconditionCheck.allowed) {
-    console.log(`✗ BLOCKED: ${preconditionCheck.reason}`)
-    console.log(`Action: ${preconditionCheck.action}`)
-    return { status: 'blocked', reason: preconditionCheck.reason }
-  }
-
-  // ALWAYS invoke subagents via Task tool for stages 2-5
-  switch(stageNumber) {
-    case 2:
-      // Invoke foundation-agent subagent
-      return await invokeSubagent('foundation-agent', {
-        pluginName,
-        contracts: loadContracts(pluginName),
-        requiredReading: 'juce8-critical-patterns.md'
-      })
-    case 3:
-      // Invoke shell-agent subagent
-      return await invokeSubagent('shell-agent', {
-        pluginName,
-        contracts: loadContracts(pluginName),
-        requiredReading: 'juce8-critical-patterns.md'
-      })
-    case 4:
-      // Invoke dsp-agent subagent
-      return await invokeSubagent('dsp-agent', {
-        pluginName,
-        contracts: loadContracts(pluginName),
-        requiredReading: 'juce8-critical-patterns.md'
-      })
-    case 5:
-      // Invoke gui-agent subagent
-      return await invokeSubagent('gui-agent', {
-        pluginName,
-        contracts: loadContracts(pluginName),
-        requiredReading: 'juce8-critical-patterns.md'
-      })
-    case 6:
-      // Can run directly or invoke validator subagent
-      return executeStage6Validation(pluginName)  // See references/stage-6-validation.md
-    default:
-      return { status: 'error', reason: `Invalid stage: ${stageNumber}` }
-  }
-}
-```
+  See [references/dispatcher-pattern.md](references/dispatcher-pattern.md) for full pseudocode.
+</dispatcher_pattern>
 
 4. **Checkpoint enforcement after EVERY subagent:**
 
-```javascript
-async function runWorkflow(pluginName, startStage = 2) {
-  let currentStage = startStage
-  let shouldContinue = true
+<workflow_loop>
+  <stage_iteration from="2" to="6">
+    <dispatch_phase>
+      Display: "━━━ Stage ${currentStage} ━━━"
 
-  while (shouldContinue && currentStage <= 6) {
-    console.log(`\n━━━ Stage ${currentStage} ━━━\n`)
+      <delegation_enforcement ref="subagent-dispatch-only">
+        Invoke subagent via Task tool (NEVER implement directly)
+      </delegation_enforcement>
 
-    // ALWAYS invoke subagent (never implement directly)
-    const result = await dispatchStage(pluginName, currentStage)
+      IF result.status == 'blocked' OR 'error':
+        Display error and return (workflow blocked)
+    </dispatch_phase>
 
-    if (result.status === 'blocked' || result.status === 'error') {
-      console.log(`\nWorkflow blocked: ${result.reason}`)
-      return result
-    }
+    <checkpoint_phase>
+      <checkpoint_enforcement enforce_order="true">
+        <step order="1" required="true" function="commitStage">
+          commitStage(pluginName, currentStage, result.description)
+          Auto-commit all changes from subagent completion
+        </step>
 
-    // CHECKPOINT: Commit, update state, present menu
-    await commitStage(pluginName, currentStage, result.description)
-    await updateHandoff(pluginName, currentStage + 1, result.completed, result.nextSteps)
-    await updatePluginStatus(pluginName, `🚧 Stage ${currentStage}`)
-    await updatePluginTimeline(pluginName, currentStage, result.description)
+        <step order="2" required="true" function="updateHandoff">
+          updateHandoff(pluginName, currentStage + 1, result.completed, result.nextSteps)
+          Update .continue-here.md with new stage, timestamp, next_action
+        </step>
 
-    // Present decision menu and WAIT for user
-    const choice = presentDecisionMenu({
-      stage: currentStage,
-      completionStatement: result.completionStatement,
-      pluginName: pluginName
-    })
+        <step order="3" required="true" function="updatePluginStatus">
+          updatePluginStatus(pluginName, `🚧 Stage ${currentStage}`)
+          Update PLUGINS.md status emoji
+        </step>
 
-    // Handle user choice
-    if (choice === 'continue' || choice === 1) {
-      currentStage++
-    } else if (choice === 'pause') {
-      console.log("\n✓ Workflow paused. Resume anytime with /continue")
-      shouldContinue = false
-    } else {
-      // Handle other menu options (review, test, etc.)
-      handleMenuChoice(choice, pluginName, currentStage)
-    }
-  }
+        <step order="4" required="true" function="updatePluginTimeline">
+          updatePluginTimeline(pluginName, currentStage, result.description)
+          Append timeline entry to PLUGINS.md
+        </step>
 
-  if (currentStage > 6) {
-    console.log("\n✓ All stages complete!")
-    await updatePluginStatus(pluginName, '✅ Working')
-  }
-}
-```
+        <step order="5" required="true" blocking="true" function="presentDecisionMenu">
+          presentDecisionMenu({ stage, completionStatement, pluginName })
+          Present numbered decision menu and WAIT for user response
+        </step>
+      </checkpoint_enforcement>
+    </checkpoint_phase>
+
+    <decision_gate blocking="true">
+      WAIT for user response (NEVER auto-proceed)
+
+      <routing>
+        IF choice == 'continue' OR choice == 1:
+          currentStage++
+        ELSE IF choice == 'pause':
+          Display: "✓ Workflow paused. Resume anytime with /continue"
+          Exit workflow loop
+        ELSE:
+          handleMenuChoice(choice, pluginName, currentStage)
+      </routing>
+    </decision_gate>
+  </stage_iteration>
+
+  <completion_check>
+    IF currentStage > 6:
+      Display: "✓ All stages complete!"
+      updatePluginStatus(pluginName, '✅ Working')
+  </completion_check>
+</workflow_loop>
 
 **Usage:**
 
@@ -286,18 +327,22 @@ runWorkflow(pluginName, resumeStage)
 
 ---
 
-## Stage Reference Files
+<reference_files>
+  Each stage has a reference file containing subagent prompt templates:
 
-Implementation stages reference files (Stages 0-1 removed, now in plugin-planning skill):
+  - [stage-2-foundation.md](references/stage-2-foundation.md) - foundation-agent
+  - [stage-3-shell.md](references/stage-3-shell.md) - shell-agent
+  - [stage-4-dsp.md](references/stage-4-dsp.md) - dsp-agent
+  - [stage-5-gui.md](references/stage-5-gui.md) - gui-agent
+  - [stage-6-validation.md](references/stage-6-validation.md) - validator
+  - [state-management.md](references/state-management.md) - State machine functions
+  - [dispatcher-pattern.md](references/dispatcher-pattern.md) - Routing logic
+  - [precondition-checks.md](references/precondition-checks.md) - Contract validation
 
-- **[Stage 2: Foundation](references/stage-2-foundation.md)** - Create build system, verify compilation (foundation-agent)
-- **[Stage 3: Shell](references/stage-3-shell.md)** - Implement APVTS with all parameters (shell-agent)
-- **[Stage 4: DSP](references/stage-4-dsp.md)** - Implement audio processing (dsp-agent)
-- **[Stage 5: GUI](references/stage-5-gui.md)** - Integrate WebView UI with parameter bindings (gui-agent)
-- **[Stage 6: Validation](references/stage-6-validation.md)** - Factory presets, pluginval, CHANGELOG (direct or validator)
-- **[State Management](references/state-management.md)** - State machine, git commits, handoffs, decision menus
-
-**Note:** Stage reference files contain subagent prompts and context. The orchestrator reads these files to construct Task tool invocations but never implements stage logic directly.
+  <usage_pattern>
+    Orchestrator reads reference files → constructs Task invocation → NEVER implements directly
+  </usage_pattern>
+</reference_files>
 
 ---
 
@@ -381,31 +426,71 @@ Workflow is successful when:
 
 ---
 
-## Notes for Claude
+<execution_guidance>
+  <critical_reminders>
+    <reminder priority="CRITICAL" ref="subagent-dispatch-only">
+      NEVER implement stages 2-5 directly - MUST use Task tool to invoke subagents
+    </reminder>
 
-**CRITICAL ORCHESTRATION REQUIREMENTS:**
+    <reminder priority="CRITICAL" ref="stage-completion-checkpoint">
+      ALWAYS present decision menu after subagent completes - user MUST confirm next action
+    </reminder>
 
-1. **NEVER implement stages 2-5 directly** - You MUST use Task tool to invoke subagents
-2. **ALWAYS present decision menu after subagent completes** - User must confirm next action
-3. **ALWAYS commit after each stage** - Use `commitStage()` from state-management.md
-4. **ALWAYS update state files** - .continue-here.md and PLUGINS.md after every stage
-5. **ALWAYS inject Required Reading** - Pass juce8-critical-patterns.md to all subagents
+    <reminder priority="HIGH">
+      ALWAYS commit after each stage using commitStage() from state-management.md
+    </reminder>
 
-**When executing this skill:**
+    <reminder priority="HIGH">
+      ALWAYS update state files (.continue-here.md and PLUGINS.md) after every stage
+    </reminder>
 
-1. Read contracts (architecture.md, plan.md) before starting
-2. Verify preconditions block if contracts missing
-3. Use Task tool for ALL stages 2-5 - no exceptions
-4. Stage reference files contain subagent prompts, not direct implementation instructions
-5. Decision menus use inline numbered lists, not AskUserQuestion tool
-6. Handoff files preserve orchestration state across sessions
-7. Build failures bubble up from subagents to orchestrator for menu presentation
+    <reminder priority="HIGH">
+      ALWAYS inject Required Reading (juce8-critical-patterns.md) to all subagents
+    </reminder>
+  </critical_reminders>
 
-**Common pitfalls to AVOID:**
+  <execution_checklist>
+    When executing this skill:
+    1. Read contracts (architecture.md, plan.md) before starting
+    2. Verify preconditions - block if contracts missing
+    3. Use Task tool for ALL stages 2-5 - no exceptions
+    4. Stage reference files contain subagent prompts, not direct implementation instructions
+    5. Decision menus use inline numbered lists, not AskUserQuestion tool
+    6. Handoff files preserve orchestration state across sessions
+    7. Build failures bubble up from subagents to orchestrator for menu presentation
+  </execution_checklist>
 
-- ❌ Implementing stage logic directly in orchestrator (ALWAYS use Task tool)
-- ❌ Auto-proceeding without user confirmation (ALWAYS wait for menu choice)
-- ❌ Not updating handoff file after stage completes
-- ❌ Skipping decision menu after subagent returns
-- ❌ Proceeding to next stage when tests fail
-- ❌ Not injecting Required Reading to subagents
+  <anti_patterns>
+    Common pitfalls to AVOID:
+
+    <anti_pattern severity="CRITICAL" ref="subagent-dispatch-only">
+      ❌ Implementing stage logic directly in orchestrator
+      ✓ ALWAYS use Task tool to invoke appropriate subagent
+    </anti_pattern>
+
+    <anti_pattern severity="CRITICAL">
+      ❌ Auto-proceeding without user confirmation
+      ✓ ALWAYS wait for menu choice after presenting options
+    </anti_pattern>
+
+    <anti_pattern severity="HIGH">
+      ❌ Not updating handoff file after stage completes
+      ✓ Update .continue-here.md immediately after subagent returns
+    </anti_pattern>
+
+    <anti_pattern severity="HIGH">
+      ❌ Skipping decision menu after subagent returns
+      ✓ Present context-appropriate menu at every checkpoint
+    </anti_pattern>
+
+    <anti_pattern severity="MEDIUM">
+      ❌ Proceeding to next stage when tests fail
+      ✓ Present investigation menu and wait for user decision
+    </anti_pattern>
+
+    <anti_pattern severity="MEDIUM">
+      ❌ Not injecting Required Reading to subagents
+      ✓ Always pass juce8-critical-patterns.md to prevent repeat mistakes
+    </anti_pattern>
+  </anti_patterns>
+</execution_guidance>
