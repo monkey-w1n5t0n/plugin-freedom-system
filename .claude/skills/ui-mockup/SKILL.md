@@ -417,11 +417,11 @@ git commit -m "feat([PluginName]): UI mockup v[N] (design iteration)"
 **Update workflow state (if in workflow context):**
 
 ```bash
-if [ -f "plugins/[PluginName]/.ideas/.continue-here.md" ]; then
+if [ -f "plugins/[PluginName]/.continue-here.md" ]; then
     # Update version tracking
-    sed -i '' "s/latest_mockup_version: .*/latest_mockup_version: [N]/" .continue-here.md
+    sed -i '' "s/latest_mockup_version: .*/latest_mockup_version: [N]/" plugins/[PluginName]/.continue-here.md
     # Keep mockup_finalized: false until user chooses "finalize"
-    git add .continue-here.md
+    git add plugins/[PluginName]/.continue-here.md
     git commit --amend --no-edit
 fi
 ```

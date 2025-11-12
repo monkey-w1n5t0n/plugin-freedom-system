@@ -133,9 +133,9 @@ Create `plugins/${PLUGIN_NAME}/.ideas/architecture.md` using the template from `
 
 **State management:**
 
-1. Create/update `.continue-here.md`:
+1. Create/update `.continue-here.md` at plugin root:
 
-Create `.continue-here.md` using template from `assets/continue-stage-0-template.md` with variables:
+Create `plugins/${PLUGIN_NAME}/.continue-here.md` using template from `assets/continue-stage-0-template.md` with variables:
 - `${PLUGIN_NAME}` - Plugin name
 - `${TIMESTAMP}` - Current timestamp
 
@@ -277,9 +277,9 @@ Create `plugins/${PLUGIN_NAME}/.ideas/plan.md` using the template from `assets/p
 
 **State management:**
 
-1. Update `.continue-here.md`:
+1. Update `.continue-here.md` at plugin root:
 
-Create `.continue-here.md` using template from `assets/continue-stage-1-template.md` with variables:
+Update `plugins/${PLUGIN_NAME}/.continue-here.md` using template from `assets/continue-stage-1-template.md` with variables:
 - `${PLUGIN_NAME}` - Plugin name
 - `${TIMESTAMP}` - Current timestamp
 - `${COMPLEXITY_SCORE}` - Calculated complexity score
@@ -326,42 +326,31 @@ After completing step 8, MUST commit changes and present decision menu. Do NOT a
 
 <handoff_protocol id="planning-to-implementation">
 <state_requirement>
-CRITICAL: Handoff modifies .continue-here.md location. Execute steps EXACTLY in sequence. File path precision is critical.
+CRITICAL: Handoff file must be updated to Stage 2. Execute steps EXACTLY in sequence.
 </state_requirement>
 
 **When user chooses to proceed to Stage 2:**
 
 <critical_sequence>
-1. Delete planning handoff (prevents dual state files):
+1. Update handoff file at plugin root:
 ```bash
-rm plugins/${PLUGIN_NAME}/.ideas/.continue-here.md
-if [ $? -ne 0 ]; then
-    echo "✗ Failed to delete planning handoff"
-    exit 1
-fi
-```
-
-2. Create implementation handoff at plugin root:
-```bash
-# IMPORTANT: Create at plugins/${PLUGIN_NAME}/.continue-here.md (NOT in .ideas/)
+# Update existing plugins/${PLUGIN_NAME}/.continue-here.md for Stage 2
 # Use template from assets/implementation-handoff-template.md
 cat > plugins/${PLUGIN_NAME}/.continue-here.md <<'EOF'
 [template content from assets/implementation-handoff-template.md]
 EOF
 ```
 
-3. Verify handoff:
+2. Verify handoff:
 ```bash
-test ! -f "plugins/${PLUGIN_NAME}/.ideas/.continue-here.md" || { echo "✗ Old handoff still exists"; exit 1; }
-test -f "plugins/${PLUGIN_NAME}/.continue-here.md" || { echo "✗ New handoff not created"; exit 1; }
+test -f "plugins/${PLUGIN_NAME}/.continue-here.md" || { echo "✗ Handoff not created"; exit 1; }
 echo "✓ Handoff verified"
 ```
 </critical_sequence>
 
 <verification_step>
 After handoff, verify:
-- plugins/[PluginName]/.ideas/.continue-here.md does NOT exist
-- plugins/[PluginName]/.continue-here.md DOES exist
+- plugins/[PluginName]/.continue-here.md exists at root
 - PLUGINS.md status updated to 🚧 Stage 2
 </verification_step>
 </handoff_protocol>

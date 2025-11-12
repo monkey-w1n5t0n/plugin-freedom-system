@@ -21,9 +21,9 @@ if [[ "$FILE_PATH" =~ plugins/([^/]+)/.ideas/(creative-brief|parameter-spec|arch
   PLUGIN_PATH="plugins/$PLUGIN_NAME"
 
   # Check if .continue-here.md exists
-  if [ -f "$PLUGIN_PATH/.ideas/.continue-here.md" ]; then
+  if [ -f "$PLUGIN_PATH/.continue-here.md" ]; then
     # Extract current stage
-    STAGE=$(grep -E '^stage:' "$PLUGIN_PATH/.ideas/.continue-here.md" | head -1 | sed 's/stage: *//')
+    STAGE=$(grep -E '^stage:' "$PLUGIN_PATH/.continue-here.md" | head -1 | sed 's/stage: *//')
 
     # Block if in implementation stages (2-5)
     if [[ "$STAGE" =~ ^[2-5]$ ]]; then

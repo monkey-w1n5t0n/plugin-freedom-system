@@ -47,30 +47,23 @@ See **[references/continuation-routing.md](references/continuation-routing.md)**
 
 ## Handoff File Locations
 
-The system uses 3 handoff locations, checked in priority order:
+The system uses 2 handoff locations, checked in priority order:
 
 <handoff_location priority="1" type="workflow">
 **Path:** `plugins/[PluginName]/.continue-here.md`
-**Meaning:** Plugin in active development (Stages 0-6)
-**Creator:** plugin-workflow skill
+**Meaning:** Plugin in active development or planning (Stages 0-6, ideation, improvement planning)
+**Creator:** plugin-planning skill, plugin-workflow skill, plugin-ideation skill
 **Contains:** stage, phase, orchestration_mode, next_action, completed work, next steps
 </handoff_location>
 
-<handoff_location priority="2" type="ideation">
-**Path:** `plugins/[PluginName]/.ideas/.continue-here.md`
-**Meaning:** Plugin in planning/ideation phase
-**Creator:** plugin-ideation skill
-**Contains:** Creative brief status, mockup status, ready-to-implement flag
-</handoff_location>
-
-<handoff_location priority="3" type="mockup">
+<handoff_location priority="2" type="mockup">
 **Path:** `plugins/[PluginName]/.ideas/mockups/.continue-here.md`
 **Meaning:** UI mockup iteration in progress
 **Creator:** ui-mockup skill
 **Contains:** mockup_version, iteration notes, finalization status
 </handoff_location>
 
-**Search order:** Priority 1 → 2 → 3. If multiple found, disambiguate (see references/handoff-location.md).
+**Search order:** Priority 1 → 2. If multiple found, disambiguate (see references/handoff-location.md).
 
 </handoff_protocol>
 
@@ -81,7 +74,7 @@ The system uses 3 handoff locations, checked in priority order:
 <critical_sequence enforcement="strict" allow_backtrack="false">
 
 <sequence_step number="1" name="locate_handoff" blocking="true">
-Search for handoff files across 3 locations, handle interactive plugin selection if no name provided, and disambiguate when multiple handoffs exist for same plugin.
+Search for handoff files across 2 locations, handle interactive plugin selection if no name provided, and disambiguate when multiple handoffs exist for same plugin.
 
 See **[references/handoff-location.md](references/handoff-location.md)** for complete location logic.
 
@@ -199,7 +192,7 @@ Resume is successful when:
 
 **MUST do when executing this skill:**
 
-1. **ALWAYS** search all 3 handoff locations before declaring "not found"
+1. **ALWAYS** search all 2 handoff locations before declaring "not found"
 2. **MUST** parse YAML carefully - handle missing optional fields gracefully
 3. **MUST** present time-ago in human-readable format (not raw timestamps)
 4. **MUST** show enough context that user remembers where they were
@@ -214,7 +207,7 @@ Resume is successful when:
 
 **NEVER do these common pitfalls:**
 
-- Forgetting to check all 3 locations
+- Forgetting to check all 2 locations
 - Auto-proceeding without user confirmation
 - Not loading contract files before continuation
 - Showing raw YAML instead of human summary

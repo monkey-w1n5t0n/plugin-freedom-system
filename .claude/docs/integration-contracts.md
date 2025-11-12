@@ -48,7 +48,7 @@ See `.claude/schemas/README.md` for validation examples.
 
 **Sends:**
 - Plugin name (string)
-- Handoff context from `.ideas/.continue-here.md`
+- Handoff context from `.continue-here.md`
 - Creative brief status (optional)
 - Mockup status (optional)
 

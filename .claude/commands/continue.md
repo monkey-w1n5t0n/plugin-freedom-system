@@ -22,8 +22,8 @@ DO NOT manually read handoff files or present summaries. The context-resume skil
     Search for `.continue-here.md` files in priority order:
 
     **Without plugin name:**
-    1. `plugins/[Name]/.continue-here.md` (implementation)
-    2. `plugins/[Name]/.ideas/.continue-here.md` (ideation/mockup)
+    1. `plugins/[Name]/.continue-here.md` (implementation/planning/ideation)
+    2. `plugins/[Name]/.ideas/mockups/.continue-here.md` (mockup iteration)
 
     Present interactive menu if multiple found:
     ```

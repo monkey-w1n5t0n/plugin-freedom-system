@@ -28,7 +28,7 @@ args: "[PluginName]"
 - `CMakeLists.txt` - Build configuration
 - `.ideas/architecture.md` - DSP specification (Stage 0 output)
 - `.ideas/plan.md` - Implementation strategy (Stage 1 output)
-- `.ideas/.continue-here.md` - Handoff state
+- `.continue-here.md` - Handoff state
 - Build artifacts in `build/plugins/[PluginName]/`
 - Installed binaries (VST3, AU) if present
 
@@ -127,7 +127,7 @@ BUILD_DIR="build/plugins/$PLUGIN_NAME"
 CMAKE_FILE="plugins/$PLUGIN_NAME/CMakeLists.txt"
 ARCH_FILE="plugins/$PLUGIN_NAME/.ideas/architecture.md"
 PLAN_FILE="plugins/$PLUGIN_NAME/.ideas/plan.md"
-HANDOFF_FILE="plugins/$PLUGIN_NAME/.ideas/.continue-here.md"
+HANDOFF_FILE="plugins/$PLUGIN_NAME/.continue-here.md"
 
 # Count files to remove
 SOURCE_COUNT=$(find "$SOURCE_DIR" -type f 2>/dev/null | wc -l | xargs)

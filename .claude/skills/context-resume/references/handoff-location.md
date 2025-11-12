@@ -2,7 +2,7 @@
 
 **Context:** This file is part of the context-resume skill.
 **Invoked by:** Main skill when user runs /continue [PluginName]
-**Purpose:** Locate handoff files across 3 possible locations and handle disambiguation
+**Purpose:** Locate handoff files across 2 possible locations and handle disambiguation
 
 ---
 
@@ -10,7 +10,7 @@
 
 **If plugin name provided:**
 
-Search the 3 standard handoff locations in order:
+Search the 2 standard handoff locations in order:
 
 ### 1. Main workflow handoff
 
@@ -18,21 +18,11 @@ Search the 3 standard handoff locations in order:
 test -f "plugins/$PLUGIN_NAME/.continue-here.md"
 ```
 
-**Location meaning:** Plugin is in active development (Stages 0-6)
-**Created by:** plugin-workflow skill
-**Contains:** Stage number, phase (if complex), completed work, next steps
+**Location meaning:** Plugin in active development, planning, or ideation (Stages 0-6, ideation, improvement planning)
+**Created by:** plugin-planning skill, plugin-workflow skill, plugin-ideation skill
+**Contains:** Stage number, phase (if complex), completed work, next steps, creative brief status, mockup status
 
-### 2. Ideation handoff
-
-```bash
-test -f "plugins/$PLUGIN_NAME/.ideas/.continue-here.md"
-```
-
-**Location meaning:** Plugin is in planning/ideation phase
-**Created by:** plugin-ideation skill
-**Contains:** Creative brief status, mockup status, ready-to-implement flag
-
-### 3. Mockup handoff
+### 2. Mockup handoff
 
 ```bash
 test -f "plugins/$PLUGIN_NAME/.ideas/mockups/.continue-here.md"

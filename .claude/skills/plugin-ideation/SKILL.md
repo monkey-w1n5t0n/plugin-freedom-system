@@ -308,7 +308,7 @@ Add entry if doesn't exist:
 <step number="7" required="true">
 **MUST create handoff file for resuming later:**
 
-**File:** `plugins/[PluginName]/.ideas/.continue-here.md`
+**File:** `plugins/[PluginName]/.continue-here.md`
 
 **Format:**
 ```markdown
@@ -619,7 +619,7 @@ Create: `plugins/[PluginName]/.ideas/improvements/[feature-name].md`
 <step number="6" required="true">
 **MUST create handoff file for resuming later:**
 
-**File:** `plugins/[PluginName]/.ideas/.continue-here.md`
+**File:** `plugins/[PluginName]/.continue-here.md`
 
 ```markdown
 ---

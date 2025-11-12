@@ -42,9 +42,9 @@ for PLUGIN in $PLUGINS; do
   fi
 
   # CRITICAL: Preserve workflow state
-  if [ -f "$PLUGIN/.ideas/.continue-here.md" ]; then
+  if [ -f "$PLUGIN/.continue-here.md" ]; then
     echo "--- .continue-here.md (WORKFLOW STATE) ---"
-    cat "$PLUGIN/.ideas/.continue-here.md"
+    cat "$PLUGIN/.continue-here.md"
     echo ""
   fi
 
