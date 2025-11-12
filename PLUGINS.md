@@ -504,9 +504,10 @@ Global:
 
 ### DrumRoulette
 
-**Status:** 🚧 **Stage 0**
+**Status:** 🚧 **Stage 1**
 **Created:** 2025-11-12
 **Type:** Instrument (Drum Sampler)
+**Complexity:** 5.0 / 5.0 (maximum - phased implementation)
 
 **Description:**
 Eight-slot drum sampler with folder-based randomization and mixer-style interface. Each slot connects to a folder for random sample selection, with per-channel lock controls and multi-output routing.
@@ -530,7 +531,7 @@ Per-Slot (×8):
 
 **DSP:** Sample playback engine using juce::Synthesiser with 8 custom voices. ADSR envelope (sustain=0). Tilt filter (cascaded low/high shelving filters at 1kHz pivot). Pitch shifting via variable-rate resampling with linear interpolation. True random file selection with recursive folder scanning. Multi-output routing (18 channels: 2 main + 16 individual).
 
-**GUI:** Eight vertical channel strips (mixer console style). LED-style trigger indicators. Color-coded lock icons (grey=unlocked, highlighted=locked). Global randomize button. Vintage hardware mixer aesthetic with brushed metal texture.
+**GUI:** Eight vertical channel strips (mixer console style). LED-style trigger indicators. Color-coded lock icons (grey=unlocked, highlighted=locked). Global randomize button. Vintage hardware mixer aesthetic with brushed metal texture (1400×950px).
 
 **MIDI:** C1-G1 (8 chromatic notes), velocity-sensitive.
 
@@ -545,6 +546,7 @@ Per-Slot (×8):
 **Lifecycle Timeline:**
 - **2025-11-12:** Creative brief completed
 - **2025-11-12 (Stage 0):** Research completed - DSP architecture documented
+- **2025-11-12 (Stage 1):** Planning - Complexity 5.0 (phased implementation: 4 DSP phases + 3 GUI phases)
 
 **Known Issues:**
 - None
