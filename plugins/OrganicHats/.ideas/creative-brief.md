@@ -31,22 +31,20 @@ The plugin provides both closed and open hi-hat sounds within a single instrumen
 | Release | 100ms-1s | 400ms | Sustained decay time for open sound |
 | Noise Color | 0-100% | 50% | Noise filtering (shared character with closed) |
 
-### Global
-
-| Parameter | Range | Default | Description |
-|-----------|-------|---------|-------------|
-| Velocity > Volume | 0-100% | 100% | Velocity sensitivity to volume |
-| Velocity > Tone | 0-100% | 50% | Velocity sensitivity to brightness |
-
 ## UI Concept
 
-**Layout:** Clean, functional layout with separate sections for closed and open hi-hats, plus global controls
-**Visual Style:** Modern, minimalist design emphasizing the warm, organic character
+**Layout:** Dual-panel layout with separate sections for closed (left) and open (right) hi-hats
+**Visual Style:** Studio Hardware aesthetic - professional 19" rack unit with industrial precision, dark brushed metal, yellow-gold accents
+**Window Size:** 600x590px
 **Key Elements:**
 - Separate parameter sections for closed (left) and open (right) hi-hats
-- Visual indication of which sound is currently active/playing
-- Choke indicator showing when closed chokes open
-- Preset browser for user preset save/recall
+- Power LED indicator showing plugin active status
+- Digital readouts below each knob for precise value display
+- Mounting holes and rack hardware styling
+
+## Velocity Sensitivity
+
+Velocity affects both volume and tone brightness. This behavior is always enabled in the DSP (no user controls for velocity sensitivity amount).
 
 ## Use Cases
 
@@ -77,7 +75,7 @@ The plugin provides both closed and open hi-hat sounds within a single instrumen
 - Velocity sensitivity: Affects both volume and tone brightness
 
 ### Presets
-- User preset save/recall capability
+- Preset management handled by DAW
 - No factory presets (users create their own sounds)
 
 ## Next Steps
