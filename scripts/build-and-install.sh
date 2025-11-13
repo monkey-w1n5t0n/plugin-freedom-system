@@ -40,6 +40,35 @@ VERBOSE=false
 RECONFIGURE=false
 LOG_FILE=""
 START_TIME=$(date +%s)
+PLATFORM=""
+VST3_INSTALL_DIR=""
+AU_INSTALL_DIR=""
+BUILD_AU=false
+
+# Detect platform
+detect_platform() {
+    case "$(uname -s)" in
+        Darwin)
+            PLATFORM="macos"
+            VST3_INSTALL_DIR="$HOME/Library/Audio/Plug-Ins/VST3"
+            AU_INSTALL_DIR="$HOME/Library/Audio/Plug-Ins/Components"
+            BUILD_AU=true
+            ;;
+        Linux)
+            PLATFORM="linux"
+            VST3_INSTALL_DIR="$HOME/.vst3"
+            AU_INSTALL_DIR=""
+            BUILD_AU=false
+            ;;
+        *)
+            error "Unsupported platform: $(uname -s)"
+            error "This script supports macOS and Linux only"
+            exit 1
+            ;;
+    esac
+
+    info "Platform: $PLATFORM"
+}
 
 # Parse arguments
 parse_args() {
@@ -152,7 +181,11 @@ phase_1_preflight_validation() {
     # Check CMake available
     info "  - Checking CMake..."
     if ! command -v cmake &> /dev/null; then
-        error "CMake not found. Install with: brew install cmake"
+        if [ "$PLATFORM" = "macos" ]; then
+            error "CMake not found. Install with: brew install cmake"
+        else
+            error "CMake not found. Install with: sudo apt install cmake"
+        fi
         echo "ERROR: CMake not found" >> "$LOG_FILE"
         exit 1
     fi
@@ -160,7 +193,11 @@ phase_1_preflight_validation() {
     # Check Ninja available
     info "  - Checking Ninja..."
     if ! command -v ninja &> /dev/null; then
-        error "Ninja not found. Install with: brew install ninja"
+        if [ "$PLATFORM" = "macos" ]; then
+            error "Ninja not found. Install with: brew install ninja"
+        else
+            error "Ninja not found. Install with: sudo apt install ninja-build"
+        fi
         echo "ERROR: Ninja not found" >> "$LOG_FILE"
         exit 1
     fi
@@ -209,11 +246,20 @@ phase_2_build() {
     fi
 
     # Build specific plugin using --target flags
-    info "  - Building ${PLUGIN_NAME} (VST3 + AU) in parallel..."
-    if ! execute cmake --build "$build_dir" --config Release --target "${PLUGIN_NAME}_VST3" --target "${PLUGIN_NAME}_AU" --parallel; then
-        error "Build failed"
-        echo "ERROR: Build failed" >> "$LOG_FILE"
-        exit 1
+    if [ "$BUILD_AU" = true ]; then
+        info "  - Building ${PLUGIN_NAME} (VST3 + AU) in parallel..."
+        if ! execute cmake --build "$build_dir" --config Release --target "${PLUGIN_NAME}_VST3" --target "${PLUGIN_NAME}_AU" --parallel; then
+            error "Build failed"
+            echo "ERROR: Build failed" >> "$LOG_FILE"
+            exit 1
+        fi
+    else
+        info "  - Building ${PLUGIN_NAME} (VST3 only) in parallel..."
+        if ! execute cmake --build "$build_dir" --config Release --target "${PLUGIN_NAME}_VST3" --parallel; then
+            error "Build failed"
+            echo "ERROR: Build failed" >> "$LOG_FILE"
+            exit 1
+        fi
     fi
 
     success "Build complete"
@@ -255,37 +301,36 @@ phase_4_remove_old_versions() {
     info "Phase 4: Remove Old Versions"
     echo "Phase 4: Remove Old Versions" >> "$LOG_FILE"
 
-    local vst3_dir="$HOME/Library/Audio/Plug-Ins/VST3"
-    local au_dir="$HOME/Library/Audio/Plug-Ins/Components"
-
     # Search for existing VST3
     info "  - Searching for old VST3..."
-    if [ -d "$vst3_dir/$PRODUCT_NAME.vst3" ]; then
+    if [ -d "$VST3_INSTALL_DIR/$PRODUCT_NAME.vst3" ]; then
         if [ "$DRY_RUN" = true ]; then
-            echo "[DRY-RUN] Would remove: $vst3_dir/$PRODUCT_NAME.vst3"
+            echo "[DRY-RUN] Would remove: $VST3_INSTALL_DIR/$PRODUCT_NAME.vst3"
         else
-            info "  - Removing old VST3: $vst3_dir/$PRODUCT_NAME.vst3"
-            rm -rf "$vst3_dir/$PRODUCT_NAME.vst3"
-            echo "Removed old VST3: $vst3_dir/$PRODUCT_NAME.vst3" >> "$LOG_FILE"
+            info "  - Removing old VST3: $VST3_INSTALL_DIR/$PRODUCT_NAME.vst3"
+            rm -rf "$VST3_INSTALL_DIR/$PRODUCT_NAME.vst3"
+            echo "Removed old VST3: $VST3_INSTALL_DIR/$PRODUCT_NAME.vst3" >> "$LOG_FILE"
         fi
     else
         info "  - No old VST3 found"
         echo "No old VST3 found" >> "$LOG_FILE"
     fi
 
-    # Search for existing AU
-    info "  - Searching for old AU..."
-    if [ -d "$au_dir/$PRODUCT_NAME.component" ]; then
-        if [ "$DRY_RUN" = true ]; then
-            echo "[DRY-RUN] Would remove: $au_dir/$PRODUCT_NAME.component"
+    # Search for existing AU (macOS only)
+    if [ "$BUILD_AU" = true ]; then
+        info "  - Searching for old AU..."
+        if [ -d "$AU_INSTALL_DIR/$PRODUCT_NAME.component" ]; then
+            if [ "$DRY_RUN" = true ]; then
+                echo "[DRY-RUN] Would remove: $AU_INSTALL_DIR/$PRODUCT_NAME.component"
+            else
+                info "  - Removing old AU: $AU_INSTALL_DIR/$PRODUCT_NAME.component"
+                rm -rf "$AU_INSTALL_DIR/$PRODUCT_NAME.component"
+                echo "Removed old AU: $AU_INSTALL_DIR/$PRODUCT_NAME.component" >> "$LOG_FILE"
+            fi
         else
-            info "  - Removing old AU: $au_dir/$PRODUCT_NAME.component"
-            rm -rf "$au_dir/$PRODUCT_NAME.component"
-            echo "Removed old AU: $au_dir/$PRODUCT_NAME.component" >> "$LOG_FILE"
+            info "  - No old AU found"
+            echo "No old AU found" >> "$LOG_FILE"
         fi
-    else
-        info "  - No old AU found"
-        echo "No old AU found" >> "$LOG_FILE"
     fi
 
     success "Old versions removed"
@@ -299,8 +344,6 @@ phase_5_install_new_versions() {
     info "Phase 5: Install New Versions"
     echo "Phase 5: Install New Versions" >> "$LOG_FILE"
 
-    local vst3_dir="$HOME/Library/Audio/Plug-Ins/VST3"
-    local au_dir="$HOME/Library/Audio/Plug-Ins/Components"
     local vst3_build="build/plugins/$PLUGIN_NAME/${PLUGIN_NAME}_artefacts/Release/VST3/$PRODUCT_NAME.vst3"
     local au_build="build/plugins/$PLUGIN_NAME/${PLUGIN_NAME}_artefacts/Release/AU/$PRODUCT_NAME.component"
 
@@ -312,34 +355,42 @@ phase_5_install_new_versions() {
         exit 1
     fi
 
-    # Verify AU artifact exists (skip in dry-run)
-    info "  - Locating AU build artifact..."
-    if [ "$DRY_RUN" = false ] && [ ! -d "$au_build" ]; then
-        error "AU build artifact not found: $au_build"
-        echo "ERROR: AU artifact not found" >> "$LOG_FILE"
-        exit 1
+    # Create VST3 install directory if it doesn't exist
+    if [ "$DRY_RUN" = false ] && [ ! -d "$VST3_INSTALL_DIR" ]; then
+        info "  - Creating VST3 directory: $VST3_INSTALL_DIR"
+        mkdir -p "$VST3_INSTALL_DIR"
     fi
 
     # Install VST3
-    info "  - Installing VST3 to $vst3_dir/"
+    info "  - Installing VST3 to $VST3_INSTALL_DIR/"
     if [ "$DRY_RUN" = true ]; then
-        echo "[DRY-RUN] cp -R \"$vst3_build\" \"$vst3_dir/\""
-        echo "[DRY-RUN] chmod -R 755 \"$vst3_dir/$PRODUCT_NAME.vst3\""
+        echo "[DRY-RUN] cp -R \"$vst3_build\" \"$VST3_INSTALL_DIR/\""
+        echo "[DRY-RUN] chmod -R 755 \"$VST3_INSTALL_DIR/$PRODUCT_NAME.vst3\""
     else
-        cp -R "$vst3_build" "$vst3_dir/"
-        chmod -R 755 "$vst3_dir/$PRODUCT_NAME.vst3"
-        echo "Installed VST3: $vst3_dir/$PRODUCT_NAME.vst3" >> "$LOG_FILE"
+        cp -R "$vst3_build" "$VST3_INSTALL_DIR/"
+        chmod -R 755 "$VST3_INSTALL_DIR/$PRODUCT_NAME.vst3"
+        echo "Installed VST3: $VST3_INSTALL_DIR/$PRODUCT_NAME.vst3" >> "$LOG_FILE"
     fi
 
-    # Install AU
-    info "  - Installing AU to $au_dir/"
-    if [ "$DRY_RUN" = true ]; then
-        echo "[DRY-RUN] cp -R \"$au_build\" \"$au_dir/\""
-        echo "[DRY-RUN] chmod -R 755 \"$au_dir/$PRODUCT_NAME.component\""
-    else
-        cp -R "$au_build" "$au_dir/"
-        chmod -R 755 "$au_dir/$PRODUCT_NAME.component"
-        echo "Installed AU: $au_dir/$PRODUCT_NAME.component" >> "$LOG_FILE"
+    # Install AU (macOS only)
+    if [ "$BUILD_AU" = true ]; then
+        # Verify AU artifact exists (skip in dry-run)
+        info "  - Locating AU build artifact..."
+        if [ "$DRY_RUN" = false ] && [ ! -d "$au_build" ]; then
+            error "AU build artifact not found: $au_build"
+            echo "ERROR: AU artifact not found" >> "$LOG_FILE"
+            exit 1
+        fi
+
+        info "  - Installing AU to $AU_INSTALL_DIR/"
+        if [ "$DRY_RUN" = true ]; then
+            echo "[DRY-RUN] cp -R \"$au_build\" \"$AU_INSTALL_DIR/\""
+            echo "[DRY-RUN] chmod -R 755 \"$AU_INSTALL_DIR/$PRODUCT_NAME.component\""
+        else
+            cp -R "$au_build" "$AU_INSTALL_DIR/"
+            chmod -R 755 "$AU_INSTALL_DIR/$PRODUCT_NAME.component"
+            echo "Installed AU: $AU_INSTALL_DIR/$PRODUCT_NAME.component" >> "$LOG_FILE"
+        fi
     fi
 
     success "New versions installed"
@@ -353,44 +404,96 @@ phase_6_clear_daw_caches() {
     info "Phase 6: Clear DAW Caches"
     echo "Phase 6: Clear DAW Caches" >> "$LOG_FILE"
 
-    local ableton_prefs="$HOME/Library/Preferences/Ableton"
-    local au_cache="$HOME/Library/Caches/AudioUnitCache"
+    if [ "$PLATFORM" = "macos" ]; then
+        # macOS DAW caches
+        local ableton_prefs="$HOME/Library/Preferences/Ableton"
+        local au_cache="$HOME/Library/Caches/AudioUnitCache"
 
-    # Clear Ableton plugin database (forces rescan)
-    info "  - Clearing Ableton plugin database..."
-    if [ "$DRY_RUN" = true ]; then
-        echo "[DRY-RUN] rm -f \"$ableton_prefs\"/*/PluginScanDb.txt"
-    else
-        if [ -d "$ableton_prefs" ]; then
-            rm -f "$ableton_prefs"/*/PluginScanDb.txt 2>/dev/null || true
-            echo "Cleared Ableton plugin database" >> "$LOG_FILE"
+        # Clear Ableton plugin database (forces rescan)
+        info "  - Clearing Ableton plugin database..."
+        if [ "$DRY_RUN" = true ]; then
+            echo "[DRY-RUN] rm -f \"$ableton_prefs\"/*/PluginScanDb.txt"
         else
-            info "  - Ableton preferences directory not found (skipping)"
-            echo "Ableton preferences not found" >> "$LOG_FILE"
+            if [ -d "$ableton_prefs" ]; then
+                rm -f "$ableton_prefs"/*/PluginScanDb.txt 2>/dev/null || true
+                echo "Cleared Ableton plugin database" >> "$LOG_FILE"
+            else
+                info "  - Ableton preferences directory not found (skipping)"
+                echo "Ableton preferences not found" >> "$LOG_FILE"
+            fi
         fi
-    fi
 
-    # Clear Audio Unit cache
-    info "  - Clearing Audio Unit cache..."
-    if [ "$DRY_RUN" = true ]; then
-        echo "[DRY-RUN] rm -rf \"$au_cache\"/*"
-    else
-        if [ -d "$au_cache" ]; then
-            rm -rf "$au_cache"/* 2>/dev/null || true
-            echo "Cleared AU cache" >> "$LOG_FILE"
+        # Clear Audio Unit cache
+        info "  - Clearing Audio Unit cache..."
+        if [ "$DRY_RUN" = true ]; then
+            echo "[DRY-RUN] rm -rf \"$au_cache\"/*"
         else
-            info "  - AU cache directory not found (skipping)"
-            echo "AU cache not found" >> "$LOG_FILE"
+            if [ -d "$au_cache" ]; then
+                rm -rf "$au_cache"/* 2>/dev/null || true
+                echo "Cleared AU cache" >> "$LOG_FILE"
+            else
+                info "  - AU cache directory not found (skipping)"
+                echo "AU cache not found" >> "$LOG_FILE"
+            fi
         fi
-    fi
 
-    # Kill AudioComponentRegistrar process
-    info "  - Killing AudioComponentRegistrar..."
-    if [ "$DRY_RUN" = true ]; then
-        echo "[DRY-RUN] killall -9 AudioComponentRegistrar 2>/dev/null || true"
+        # Kill AudioComponentRegistrar process
+        info "  - Killing AudioComponentRegistrar..."
+        if [ "$DRY_RUN" = true ]; then
+            echo "[DRY-RUN] killall -9 AudioComponentRegistrar 2>/dev/null || true"
+        else
+            killall -9 AudioComponentRegistrar 2>/dev/null || true
+            echo "Killed AudioComponentRegistrar" >> "$LOG_FILE"
+        fi
     else
-        killall -9 AudioComponentRegistrar 2>/dev/null || true
-        echo "Killed AudioComponentRegistrar" >> "$LOG_FILE"
+        # Linux DAW caches
+        local bitwig_cache="$HOME/.BitwigStudio/cache/vst3"
+        local ardour_cache="$HOME/.config/ardour"
+        local reaper_cache="$HOME/.config/REAPER/reaper-vstplugins64.ini"
+
+        # Clear Bitwig Studio cache
+        info "  - Clearing Bitwig Studio cache..."
+        if [ "$DRY_RUN" = true ]; then
+            echo "[DRY-RUN] rm -rf \"$bitwig_cache\"/*"
+        else
+            if [ -d "$bitwig_cache" ]; then
+                rm -rf "$bitwig_cache"/* 2>/dev/null || true
+                echo "Cleared Bitwig cache" >> "$LOG_FILE"
+            else
+                info "  - Bitwig cache not found (skipping)"
+                echo "Bitwig cache not found" >> "$LOG_FILE"
+            fi
+        fi
+
+        # Clear Ardour plugin metadata
+        info "  - Clearing Ardour plugin metadata..."
+        if [ "$DRY_RUN" = true ]; then
+            echo "[DRY-RUN] rm -rf \"$ardour_cache\"*/plugin_metadata/*"
+        else
+            if [ -d "$ardour_cache" ]; then
+                rm -rf "$ardour_cache"*/plugin_metadata/* 2>/dev/null || true
+                echo "Cleared Ardour plugin metadata" >> "$LOG_FILE"
+            else
+                info "  - Ardour cache not found (skipping)"
+                echo "Ardour cache not found" >> "$LOG_FILE"
+            fi
+        fi
+
+        # Update REAPER plugin list (remove old references)
+        info "  - Updating REAPER plugin list..."
+        if [ "$DRY_RUN" = true ]; then
+            echo "[DRY-RUN] sed -i \"/$PRODUCT_NAME/d\" \"$reaper_cache\""
+        else
+            if [ -f "$reaper_cache" ]; then
+                sed -i "/$PRODUCT_NAME/d" "$reaper_cache" 2>/dev/null || true
+                echo "Updated REAPER plugin list" >> "$LOG_FILE"
+            else
+                info "  - REAPER cache not found (skipping)"
+                echo "REAPER cache not found" >> "$LOG_FILE"
+            fi
+        fi
+
+        info "  - Note: REAPER and other DAWs may rescan on next launch"
     fi
 
     success "DAW caches cleared"
@@ -404,10 +507,8 @@ phase_7_verification() {
     info "Phase 7: Verification"
     echo "Phase 7: Verification" >> "$LOG_FILE"
 
-    local vst3_dir="$HOME/Library/Audio/Plug-Ins/VST3"
-    local au_dir="$HOME/Library/Audio/Plug-Ins/Components"
-    local vst3_path="$vst3_dir/$PRODUCT_NAME.vst3"
-    local au_path="$au_dir/$PRODUCT_NAME.component"
+    local vst3_path="$VST3_INSTALL_DIR/$PRODUCT_NAME.vst3"
+    local au_path="$AU_INSTALL_DIR/$PRODUCT_NAME.component"
 
     # Check VST3 exists (skip in dry-run)
     info "  - Checking VST3 exists..."
@@ -417,12 +518,14 @@ phase_7_verification() {
         exit 1
     fi
 
-    # Check AU exists (skip in dry-run)
-    info "  - Checking AU exists..."
-    if [ "$DRY_RUN" = false ] && [ ! -d "$au_path" ]; then
-        error "AU not found at: $au_path"
-        echo "ERROR: AU verification failed" >> "$LOG_FILE"
-        exit 1
+    # Check AU exists (macOS only, skip in dry-run)
+    if [ "$BUILD_AU" = true ]; then
+        info "  - Checking AU exists..."
+        if [ "$DRY_RUN" = false ] && [ ! -d "$au_path" ]; then
+            error "AU not found at: $au_path"
+            echo "ERROR: AU verification failed" >> "$LOG_FILE"
+            exit 1
+        fi
     fi
 
     if [ "$DRY_RUN" = true ]; then
@@ -434,30 +537,30 @@ phase_7_verification() {
         echo ""
         info "Would verify:"
         echo "  VST3: $vst3_path"
-        echo "  AU:   $au_path"
+        if [ "$BUILD_AU" = true ]; then
+            echo "  AU:   $au_path"
+        fi
     else
         # Check timestamps (modified within last 60 seconds)
         info "  - Checking timestamps..."
         local now=$(date +%s)
-        local vst3_mtime=$(stat -f %m "$vst3_path" 2>/dev/null || echo 0)
-        local au_mtime=$(stat -f %m "$au_path" 2>/dev/null || echo 0)
+
+        # Platform-specific stat command
+        if [ "$PLATFORM" = "macos" ]; then
+            local vst3_mtime=$(stat -f %m "$vst3_path" 2>/dev/null || echo 0)
+        else
+            local vst3_mtime=$(stat -c %Y "$vst3_path" 2>/dev/null || echo 0)
+        fi
         local vst3_age=$((now - vst3_mtime))
-        local au_age=$((now - au_mtime))
 
         if [ $vst3_age -gt 60 ]; then
             warning "VST3 timestamp is older than 60 seconds (${vst3_age}s) - may not be fresh build"
             echo "WARNING: VST3 timestamp: ${vst3_age}s old" >> "$LOG_FILE"
         fi
 
-        if [ $au_age -gt 60 ]; then
-            warning "AU timestamp is older than 60 seconds (${au_age}s) - may not be fresh build"
-            echo "WARNING: AU timestamp: ${au_age}s old" >> "$LOG_FILE"
-        fi
-
         # Get file sizes
         info "  - Checking file sizes..."
         local vst3_size=$(du -sh "$vst3_path" | cut -f1)
-        local au_size=$(du -sh "$au_path" | cut -f1)
 
         echo ""
         success "Verification complete"
@@ -465,13 +568,28 @@ phase_7_verification() {
         info "Installed plugins:"
         echo "  VST3: $vst3_path"
         echo "        Size: $vst3_size, Age: ${vst3_age}s"
-        echo "  AU:   $au_path"
-        echo "        Size: $au_size, Age: ${au_age}s"
 
         echo "" >> "$LOG_FILE"
         echo "Verification: PASS" >> "$LOG_FILE"
         echo "VST3: $vst3_path ($vst3_size, ${vst3_age}s old)" >> "$LOG_FILE"
-        echo "AU: $au_path ($au_size, ${au_age}s old)" >> "$LOG_FILE"
+
+        # AU verification (macOS only)
+        if [ "$BUILD_AU" = true ]; then
+            if [ "$PLATFORM" = "macos" ]; then
+                local au_mtime=$(stat -f %m "$au_path" 2>/dev/null || echo 0)
+            fi
+            local au_age=$((now - au_mtime))
+
+            if [ $au_age -gt 60 ]; then
+                warning "AU timestamp is older than 60 seconds (${au_age}s) - may not be fresh build"
+                echo "WARNING: AU timestamp: ${au_age}s old" >> "$LOG_FILE"
+            fi
+
+            local au_size=$(du -sh "$au_path" | cut -f1)
+            echo "  AU:   $au_path"
+            echo "        Size: $au_size, Age: ${au_age}s"
+            echo "AU: $au_path ($au_size, ${au_age}s old)" >> "$LOG_FILE"
+        fi
     fi
 }
 
@@ -480,6 +598,7 @@ phase_7_verification() {
 # ============================================================================
 main() {
     parse_args "$@"
+    detect_platform
     setup_logging
 
     echo "============================================================================"

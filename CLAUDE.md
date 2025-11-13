@@ -379,3 +379,44 @@ Build → Test → Find Issue → Research → Improve → Document → Validate
 - **troubleshooting-docs** captures knowledge (dual-indexed for fast lookup)
 - **ui-mockup finalization** auto-updates brief (treats mockup as source of truth for UI decisions)
 - **plugin-lifecycle** manages deployment (install/uninstall with cache clearing)
+
+## Installation Locations
+
+**macOS:**
+- VST3: `~/Library/Audio/Plug-Ins/VST3/[PluginName].vst3`
+- AU: `~/Library/Audio/Plug-Ins/Components/[PluginName].component`
+- Standalone: `plugins/[PluginName]/build/[PluginName]_artefacts/Release/Standalone/[PluginName].app`
+
+**Linux:**
+- VST3: `~/.vst3/[PluginName].vst3`
+- Standalone: `plugins/[PluginName]/build/[PluginName]_artefacts/Release/Standalone/[PluginName]`
+
+**Note:** AU (Audio Unit) format is macOS-exclusive. Linux builds include VST3 and Standalone only.
+
+## System Requirements
+
+**Platforms:**
+- macOS 13+ (Sonoma recommended)
+- Linux (Ubuntu 22.04+, Debian-based distros)
+
+**Dependencies:**
+
+**macOS:**
+- Xcode Command Line Tools
+- JUCE 8.0.0+
+- CMake 3.15+
+- Python 3.8+
+- pluginval (optional)
+- Git
+
+**Linux:**
+- build-essential (GCC/G++)
+- JUCE 8.0.0+
+- CMake 3.15+
+- Python 3.8+
+- ninja-build
+- pluginval (optional)
+- Git
+- JUCE system libraries: webkit2gtk-4.0, libasound2-dev, libfreetype6-dev, libx11-dev, libxrandr-dev, libgl1-mesa-dev, libjack-jackd2-dev
+
+**Validated/Installed via:** `/setup` command
