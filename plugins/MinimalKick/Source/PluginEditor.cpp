@@ -4,14 +4,44 @@
 MinimalKickAudioProcessorEditor::MinimalKickAudioProcessorEditor(MinimalKickAudioProcessor& p)
     : AudioProcessorEditor(&p), processorRef(p)
 {
-    // Create WebView with resource provider
+    // Pattern #11: Initialize in order - Relays → WebView → Attachments
+
+    // 1. Create relays FIRST (must match APVTS parameter IDs)
+    sweepRelay = std::make_unique<juce::WebSliderRelay>("sweep");
+    timeRelay = std::make_unique<juce::WebSliderRelay>("time");
+    attackRelay = std::make_unique<juce::WebSliderRelay>("attack");
+    decayRelay = std::make_unique<juce::WebSliderRelay>("decay");
+    driveRelay = std::make_unique<juce::WebSliderRelay>("drive");
+
+    // 2. Create WebView SECOND with all relays registered
     webView = std::make_unique<juce::WebBrowserComponent>(
         juce::WebBrowserComponent::Options{}
             .withNativeIntegrationEnabled()
             .withResourceProvider([this](const auto& url) { return getResource(url); })
+            .withOptionsFrom(*sweepRelay)
+            .withOptionsFrom(*timeRelay)
+            .withOptionsFrom(*attackRelay)
+            .withOptionsFrom(*decayRelay)
+            .withOptionsFrom(*driveRelay)
     );
 
     addAndMakeVisible(*webView);
+
+    // 3. Create attachments LAST (Pattern #12: three parameters - parameter, relay, nullptr)
+    sweepAttachment = std::make_unique<juce::WebSliderParameterAttachment>(
+        *processorRef.parameters.getParameter("sweep"), *sweepRelay, nullptr);
+
+    timeAttachment = std::make_unique<juce::WebSliderParameterAttachment>(
+        *processorRef.parameters.getParameter("time"), *timeRelay, nullptr);
+
+    attackAttachment = std::make_unique<juce::WebSliderParameterAttachment>(
+        *processorRef.parameters.getParameter("attack"), *attackRelay, nullptr);
+
+    decayAttachment = std::make_unique<juce::WebSliderParameterAttachment>(
+        *processorRef.parameters.getParameter("decay"), *decayRelay, nullptr);
+
+    driveAttachment = std::make_unique<juce::WebSliderParameterAttachment>(
+        *processorRef.parameters.getParameter("drive"), *driveRelay, nullptr);
 
     // Set editor size (730×280px from mockup)
     setSize(730, 280);

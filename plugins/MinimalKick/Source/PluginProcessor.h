@@ -30,6 +30,9 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
+    // Public access for UI parameter binding
+    juce::AudioProcessorValueTreeState parameters;
+
 private:
     // DSP Components (declared BEFORE parameters for initialization order)
     juce::dsp::Oscillator<float> oscillator;
@@ -44,9 +47,6 @@ private:
     // Pitch envelope state
     float pitchEnvelopeValue { 0.0f };  // Normalized 0.0 to 1.0 (decays from 1.0 to 0.0)
     int pitchEnvelopeSampleCount { 0 };
-
-    // APVTS comes AFTER DSP components
-    juce::AudioProcessorValueTreeState parameters;
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 

@@ -33,7 +33,7 @@
 | OrganicHats | 📦 Installed | 1.0.0 | 2025-11-12 |
 | DrumRoulette | 📦 Installed | 1.0.0 | 2025-11-12 |
 | Scatter | 💡 Ideated | - | 2025-11-12 |
-| MinimalKick | 🚧 Stage 4 | - | 2025-11-13 |
+| MinimalKick | 🚧 Stage 5 | - | 2025-11-13 |
 
 ### GainKnob
 
@@ -547,7 +547,7 @@ Granular reversed delay with beautiful stuttering grains, randomized pitch (quan
 
 ### MinimalKick
 
-**Status:** 🚧 Stage 4
+**Status:** 🚧 Stage 5
 **Type:** Synth
 **Created:** 2025-11-12
 **Complexity:** 5.0 (Complex - phased implementation)
@@ -581,6 +581,7 @@ Minimal house kick drum synthesizer with sine wave + pitch envelope architecture
 - **2025-11-13 (Stage 4 Phase 4.2):** Pitch envelope complete - Exponential decay with sweep/time parameters (808-style kick working)
 - **2025-11-13 (Stage 4 Phase 4.3):** Saturation complete - Tanh waveshaping adds warm harmonics (drive parameter 0-100%)
 - **2025-11-13 (Stage 4):** DSP complete - All 3 phases finished (core synthesis + pitch envelope + saturation)
+- **2025-11-13 (Stage 5 Phase 5.1):** WebView layout complete - All 5 knobs rendering (730×280px, vintage hardware aesthetic)
 
 **Known Issues:**
 - None

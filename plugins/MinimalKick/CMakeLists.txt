@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.15)
 
+project(MinimalKick VERSION 1.0.0)
+
+# Find JUCE
+set(JUCE_PATH "/Applications/JUCE" CACHE PATH "Path to JUCE framework")
+add_subdirectory("${JUCE_PATH}" JUCE EXCLUDE_FROM_ALL)
+
 # Plugin formats: VST3, AU, Standalone
 juce_add_plugin(MinimalKick
     COMPANY_NAME "YourCompany"

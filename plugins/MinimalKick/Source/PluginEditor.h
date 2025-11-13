@@ -15,8 +15,25 @@ public:
 private:
     MinimalKickAudioProcessor& processorRef;
 
-    // WebView component (Pattern #11: std::unique_ptr)
+    // Pattern #11: Member order is critical - Relays → WebView → Attachments
+    // (Destroyed in reverse order to prevent use-after-free)
+
+    // 1. Relays (created first, destroyed last)
+    std::unique_ptr<juce::WebSliderRelay> sweepRelay;
+    std::unique_ptr<juce::WebSliderRelay> timeRelay;
+    std::unique_ptr<juce::WebSliderRelay> attackRelay;
+    std::unique_ptr<juce::WebSliderRelay> decayRelay;
+    std::unique_ptr<juce::WebSliderRelay> driveRelay;
+
+    // 2. WebView (created second, uses relays)
     std::unique_ptr<juce::WebBrowserComponent> webView;
+
+    // 3. Attachments (created last, destroyed first - depend on relays)
+    std::unique_ptr<juce::WebSliderParameterAttachment> sweepAttachment;
+    std::unique_ptr<juce::WebSliderParameterAttachment> timeAttachment;
+    std::unique_ptr<juce::WebSliderParameterAttachment> attackAttachment;
+    std::unique_ptr<juce::WebSliderParameterAttachment> decayAttachment;
+    std::unique_ptr<juce::WebSliderParameterAttachment> driveAttachment;
 
     // Resource provider for serving HTML/JS files
     std::optional<juce::WebBrowserComponent::Resource> getResource(const juce::String& url);
