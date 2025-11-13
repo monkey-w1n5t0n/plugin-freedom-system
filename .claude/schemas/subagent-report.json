@@ -124,6 +124,14 @@
     "ready_for_next_stage": {
       "type": "boolean",
       "description": "Whether the workflow can proceed to the next stage"
+    },
+    "stateUpdated": {
+      "type": "boolean",
+      "description": "True if agent successfully updated .continue-here.md and PLUGINS.md"
+    },
+    "stateUpdateError": {
+      "type": "string",
+      "description": "Error message if state update failed (optional)"
     }
   },
   "additionalProperties": false

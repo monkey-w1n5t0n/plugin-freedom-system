@@ -954,10 +954,136 @@ See `.claude/schemas/README.md` for validation details.
 - Event listener not updating HTML element
 </troubleshooting>
 
+<state_management>
+## State Management
+
+After completing UI integration, update workflow state files:
+
+### Step 1: Read Current State
+
+Read the existing continuation file:
+
+```bash
+# Read current state
+cat plugins/[PluginName]/.continue-here.md
+```
+
+Parse the YAML frontmatter to verify the current stage matches expected (should be 3).
+
+### Step 2: Calculate Contract Checksums
+
+Calculate SHA256 checksums for tamper detection:
+
+```bash
+# Calculate checksums
+BRIEF_SHA=$(shasum -a 256 plugins/[PluginName]/.ideas/creative-brief.md | awk '{print $1}')
+PARAM_SHA=$(shasum -a 256 plugins/[PluginName]/.ideas/parameter-spec.md | awk '{print $1}')
+ARCH_SHA=$(shasum -a 256 plugins/[PluginName]/.ideas/architecture.md | awk '{print $1}')
+PLAN_SHA=$(shasum -a 256 plugins/[PluginName]/.ideas/plan.md | awk '{print $1}')
+```
+
+### Step 3: Update .continue-here.md
+
+Update the YAML frontmatter fields:
+
+```yaml
+---
+plugin: [PluginName]
+stage: 4
+phase: null
+status: complete
+last_updated: [YYYY-MM-DD]
+complexity_score: [from plan.md]
+phased_implementation: [from plan.md]
+orchestration_mode: true
+next_action: begin_stage_5
+next_phase: null
+contract_checksums:
+  creative_brief: sha256:[hash]
+  parameter_spec: sha256:[hash]
+  architecture: sha256:[hash]
+  plan: sha256:[hash]
+---
+```
+
+Update the Markdown sections:
+
+- **Append to "Completed So Far":** `- **Stage 4:** UI integrated - WebView operational, [N] parameter controls bound`
+- **Update "Next Steps":** Remove Stage 4 items, add Stage 5 validation items
+- **Update "Testing Checklist":** Mark UI-related tests complete
+
+### Step 4: Update PLUGINS.md
+
+Update both locations atomically:
+
+**Registry table:**
+```markdown
+| PluginName | 🚧 Stage 4 | 1.0.0 | [YYYY-MM-DD] |
+```
+
+**Full entry:**
+```markdown
+### PluginName
+**Status:** 🚧 Stage 4
+...
+**Lifecycle Timeline:**
+- **[YYYY-MM-DD] (Stage 4):** UI integrated - WebView operational
+
+**Last Updated:** [YYYY-MM-DD]
+```
+
+### Step 5: Report State Update in JSON
+
+Include state update status in the completion report:
+
+```json
+{
+  "agent": "gui-agent",
+  "status": "success",
+  "outputs": {
+    "plugin_name": "[PluginName]",
+    "webview_integrated": true,
+    "ui_files_created": [...],
+    "relays_created": 5,
+    "attachments_created": 5
+  },
+  "issues": [],
+  "ready_for_next_stage": true,
+  "stateUpdated": true
+}
+```
+
+**On state update error:**
+
+```json
+{
+  "agent": "gui-agent",
+  "status": "success",
+  "outputs": {
+    "plugin_name": "[PluginName]",
+    ...
+  },
+  "issues": [],
+  "ready_for_next_stage": true,
+  "stateUpdated": false,
+  "stateUpdateError": "Failed to write .continue-here.md: [error message]"
+}
+```
+
+**Error handling:**
+
+If state update fails:
+1. Report implementation success but state update failure
+2. Set `stateUpdated: false`
+3. Include `stateUpdateError` with specific error message
+4. Orchestrator will attempt manual state update
+
+</state_management>
+
 <success_criteria>
 ## Success Criteria
 
-**Stage 5 succeeds when:**
+**Stage 4 succeeds when:**
 
 1. Finalized UI mockup integrated (HTML/CSS/JS in ui/public/)
 2. All parameters from parameter-spec.md have relay + attachment
@@ -969,8 +1095,9 @@ See `.claude/schemas/README.md` for validation details.
 8. Automation works (parameters change UI)
 9. Presets work (load updates UI)
 10. Plugin doesn't crash on reload
+11. State files updated (.continue-here.md, PLUGINS.md)
 
-**Stage 5 fails when:**
+**Stage 4 fails when:**
 
 - No finalized UI mockup found (blocking error)
 - Missing bindings (parameters without relay/attachment)
