@@ -34,6 +34,7 @@
 | OrganicHats | 📦 Installed | 1.0.0 | 2025-11-12 |
 | DrumRoulette | 📦 Installed | 1.0.0 | 2025-11-12 |
 | Scatter | 💡 Ideated | - | 2025-11-12 |
+| AutoClip | 💡 Ideated (Draft Params) | - | 2025-11-13 |
 | MinimalKick | 🚧 Stage 5 | - | 2025-11-13 |
 
 ### GainKnob
@@ -545,6 +546,32 @@ Granular reversed delay with beautiful stuttering grains, randomized pitch (quan
 - None
 
 **Last Updated:** 2025-11-12
+
+### AutoClip
+
+**Status:** 💡 Ideated (Draft Params)
+**Type:** Effect
+**Created:** 2025-11-13
+
+**Description:**
+Hard clipper with automatic peak-based gain matching for drum processing.
+
+**Parameters (2 total):**
+- clipThreshold: 0-100%, default 0% (clipping threshold)
+- soloClipped: Off/On, default Off (listen to clipped signal only)
+
+**DSP:** Hard clipping with peak-based automatic gain compensation. Fixed 5ms lookahead for transient anticipation.
+
+**GUI:** Minimalist single-screen layout with large threshold control and clip solo toggle.
+
+**Lifecycle Timeline:**
+- **2025-11-13:** Creative brief completed
+- **2025-11-13:** Draft parameters captured (2 parameters)
+
+**Known Issues:**
+- None
+
+**Last Updated:** 2025-11-13
 
 ### MinimalKick
 
