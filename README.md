@@ -1,6 +1,6 @@
 # Plugin Freedom System
 
-An AI-assisted JUCE plugin development system that enables conversational creation of professional VST3 and AU audio plugins for macOS. Design and build custom audio processors through natural dialogue with Claude Code—no programming experience required.
+An AI-assisted JUCE plugin development system that enables conversational creation of professional VST3 and AU audio plugins for macOS and Linux. Design and build custom audio processors through natural dialogue with Claude Code—no programming experience required.
 
 **Created by [TÂCHES](https://youtube.com/tachesteaches)**
 
@@ -26,7 +26,11 @@ By enabling conversational plugin development, this system:
 - **Utilities**: Analyzers, meters, routing tools, MIDI processors
 - **Experimental**: Custom DSP algorithms, hybrid processors, generative tools
 
-All plugins compile to native VST3/AU formats compatible with any DAW (Ableton, Logic, Reaper, etc.).
+**Supported Formats:**
+- **macOS:** VST3, AU (Audio Unit), Standalone
+- **Linux:** VST3, Standalone (AU is macOS-exclusive)
+
+Compatible with all major DAWs: Ableton, Logic (macOS), Reaper, Bitwig, Ardour, and more.
 
 ## How It Works
 
@@ -180,10 +184,13 @@ At every completion point:
 
 ### Prerequisites
 
-- macOS (Sonoma or later recommended)
+**Required:**
+- macOS 13+ or Linux (Ubuntu 22.04+, Debian-based distros)
 - Claude Code CLI
 
-All other dependencies (Xcode Command Line Tools, JUCE, CMake, Python, pluginval) can be validated and installed via `/setup`.
+**Dependencies** (validated/installed via `/setup`):
+- **macOS:** Xcode Command Line Tools, JUCE 8.0+, CMake, Python, pluginval (optional)
+- **Linux:** build-essential, JUCE 8.0+, CMake, Python, ninja-build, pluginval (optional), JUCE system libraries (webkit2gtk, ALSA, X11, etc.)
 
 ### First-Time Setup
 
