@@ -33,7 +33,7 @@
 | OrganicHats | 📦 Installed | 1.0.0 | 2025-11-12 |
 | DrumRoulette | 📦 Installed | 1.0.0 | 2025-11-12 |
 | Scatter | 💡 Ideated | - | 2025-11-12 |
-| MinimalKick | 💡 Ideated | - | 2025-11-12 |
+| MinimalKick | 🚧 Stage 0 | - | 2025-11-12 |
 
 ### GainKnob
 
@@ -544,7 +544,7 @@ Granular reversed delay with beautiful stuttering grains, randomized pitch (quan
 
 ### MinimalKick
 
-**Status:** 💡 Ideated
+**Status:** 🚧 Stage 0
 **Type:** Synth
 **Created:** 2025-11-12
 
@@ -552,14 +552,16 @@ Granular reversed delay with beautiful stuttering grains, randomized pitch (quan
 Minimal house kick drum synthesizer with sine wave + pitch envelope architecture for deep, subby kicks that sit perfectly in minimal and tech house tracks.
 
 **Parameters (5 total):**
-- Pitch: 30-100 Hz, default 50 Hz (starting frequency)
-- Decay: 50-2000 ms, default 400 ms (pitch envelope decay time)
-- Attack: 0-50 ms, default 5 ms (amplitude attack)
-- Release: 50-1000 ms, default 300 ms (amplitude release)
+- Sweep: 0-24 semitones, default 12 st (pitch envelope starting offset)
+- Time: 5-500 ms, default 50 ms (pitch envelope decay time)
+- Attack: 0-50 ms, default 5 ms (amplitude envelope attack)
+- Decay: 50-2000 ms, default 400 ms (amplitude envelope decay)
 - Drive: 0-100%, default 20% (saturation/harmonics)
 
 **Lifecycle Timeline:**
 - **2025-11-12:** Creative brief completed
+- **2025-11-12:** UI mockup v2 finalized (5 knobs, vintage hardware aesthetic)
+- **2025-11-12 (Stage 0):** Research completed - DSP architecture documented (Tier 4, 6 features)
 
 **Known Issues:**
 - None
