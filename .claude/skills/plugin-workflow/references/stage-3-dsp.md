@@ -557,7 +557,9 @@ Choose (1-6): _
 }
 ````
 
-### 7. Decision Menu (After Tests Pass)
+### 7. Decision Menu (After Tests Pass) - GUI Decision Gate
+
+**CRITICAL: This is the GUI-Optional Flow decision gate. User chooses custom UI OR headless.**
 
 ```
 ✓ Audio Engine Working
@@ -569,15 +571,266 @@ Parameters connected: [N]
 Tests: All passed
 Status: Ready for UI integration
 
-What's next?
-1. Integrate UI - Connect your interface to the audio engine (recommended)
-2. Test audio in DAW - Listen to your processing
-3. Review DSP code - See implementation details
-4. Fine-tune audio - Adjust processing before UI
+What type of interface do you want?
+
+1. Add custom UI - Create WebView interface with mockup (15 min)
+2. Ship headless - Use DAW controls only (fast, v1.0.0 in ~3 min)
+3. Test audio in DAW - Listen to your processing
+4. Review DSP code - See implementation details
 5. Pause workflow - Resume anytime
 6. Other
 
 Choose (1-6): _
+```
+
+**Routing logic:**
+
+```typescript
+const choice = getUserInput();
+
+if (choice === "1" || choice === "add_gui" || choice === "custom ui") {
+  // Option 1: Custom WebView UI path (existing Stage 4 behavior)
+  handleGuiPath(pluginName, complexityScore);
+} else if (choice === "2" || choice === "headless" || choice === "ship headless") {
+  // Option 2: Headless path (NEW)
+  handleHeadlessPath(pluginName, complexityScore);
+} else if (choice === "3") {
+  // Test in DAW
+  console.log("\nInstructions for DAW testing:\n1. Build plugin\n2. Load in DAW\n3. Test parameters\n\nReturn here when ready.");
+  // Re-present decision menu
+} else if (choice === "4") {
+  // Review code
+  const processorCode = readFile(`plugins/${pluginName}/Source/PluginProcessor.cpp`);
+  console.log(processorCode);
+  // Re-present decision menu
+} else if (choice === "5" || choice === "pause") {
+  // Pause workflow
+  updateHandoff(pluginName, 3, "Stage 3: DSP complete, paused at GUI decision gate",
+    ["Add custom UI", "Ship headless", "Test in DAW"], complexityScore, false);
+  console.log("\n⏸ Paused at GUI decision gate. Resume with /continue");
+  return;
+}
+```
+
+**Helper function: handleGuiPath()** (existing Stage 4 logic):
+
+```typescript
+function handleGuiPath(pluginName: string, complexityScore: number) {
+  // Check for finalized mockup
+  const mockupPath = findLatestMockup(pluginName);
+
+  if (!mockupPath) {
+    console.log(`
+No finalized UI mockup found for ${pluginName}.
+
+Would you like to:
+1. Create mockup now - Run ui-mockup skill (15 min)
+2. Use existing mockup - I'll tell you which version
+3. Skip GUI for now - Return to decision menu
+4. Other
+
+Choose (1-4): _
+    `);
+
+    const mockupChoice = getUserInput();
+
+    if (mockupChoice === "1") {
+      // Invoke ui-mockup skill
+      Skill({ skill: "ui-mockup" });
+
+      // After mockup finalized, read path and continue
+      const finalizedMockupPath = findLatestMockup(pluginName);
+
+      if (!finalizedMockupPath) {
+        console.log("✗ Mockup creation failed or was cancelled. Returning to decision menu.");
+        // Re-present GUI decision gate
+        return;
+      }
+
+      mockupPath = finalizedMockupPath;
+    } else if (mockupChoice === "3") {
+      // Return to main decision gate
+      // Re-present GUI decision gate from section 7
+      return;
+    }
+  } else {
+    console.log(`✓ Found existing mockup: ${mockupPath}`);
+  }
+
+  // Mockup exists - proceed to Stage 4 (GUI) as normal
+  console.log("\n━━━ Integrating WebView UI ━━━\n");
+
+  // Continue to Stage 4 GUI implementation (existing behavior)
+  // This will be handled by main workflow orchestration
+  currentStage = 4;
+}
+```
+
+**Helper function: handleHeadlessPath()** (NEW):
+
+```typescript
+function handleHeadlessPath(pluginName: string, complexityScore: number) {
+  console.log(`
+━━━ Generating minimal editor for ${pluginName} ━━━
+
+Creating headless plugin interface:
+- Minimal PluginEditor.h/cpp (simple window with plugin name)
+- DAW will provide parameter controls automatically
+- Plugin will be fully functional without custom UI
+- Can add custom UI later via /improve ${pluginName}
+  `);
+
+  // Check if mockup exists (user might have created one during ideation)
+  const mockupPath = findLatestMockup(pluginName);
+  if (mockupPath) {
+    console.log(`
+Note: Existing UI mockup found (${mockupPath}) but not used.
+Mockup preserved for future use (add UI via /improve later).
+    `);
+  }
+
+  // Generate minimal editor from template
+  generateMinimalEditor(pluginName);
+
+  // Update state files
+  updateHandoff(
+    pluginName,
+    4,
+    "Stage 4: GUI - Minimal editor (headless, DAW controls only)",
+    ["Run validation tests", "Install plugin", "Add custom UI later"],
+    complexityScore,
+    false,
+    "headless" // NEW: gui_type field
+  );
+
+  updatePluginStatus(pluginName, "🚧 Stage 4");
+  updatePluginTimeline(
+    pluginName,
+    4,
+    "GUI complete - Minimal editor (headless, uses DAW controls)"
+  );
+
+  // Git commit
+  bash(`
+git add plugins/${pluginName}/Source/PluginEditor.h
+git add plugins/${pluginName}/Source/PluginEditor.cpp
+git add plugins/${pluginName}/.continue-here.md
+git add PLUGINS.md
+
+git commit -m "$(cat <<'EOF'
+feat(${pluginName}): Stage 4 - Minimal Editor (Headless)
+
+Generated minimal PluginEditor for headless deployment
+Plugin uses DAW-provided parameter controls
+Can add custom WebView UI later via /improve command
+
+🤖 Generated with Claude Code
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+EOF
+)"
+  `);
+
+  console.log(`✓ Committed: ${bash('git log -1 --format="%h"')}`);
+
+  // Present decision menu
+  console.log(`
+✓ Minimal editor created
+
+Files generated:
+- Source/PluginEditor.h
+- Source/PluginEditor.cpp
+
+Plugin is now headless (no custom UI):
+- DAW will provide sliders/knobs automatically
+- All parameters are exposed for automation
+- Can add custom UI later via /improve ${pluginName}
+
+What's next?
+
+1. Complete validation - Run tests and finalize v1.0.0 (recommended)
+2. Test in DAW - See parameter controls in action
+3. Add custom UI now - Create WebView interface after all
+4. Review code - See minimal editor implementation
+5. Pause workflow
+6. Other
+
+Choose (1-6): _
+  `);
+
+  const nextChoice = getUserInput();
+
+  if (nextChoice === "1") {
+    // Proceed to Stage 5 (validation)
+    currentStage = 5;
+    // Return to main workflow orchestration
+  } else if (nextChoice === "3") {
+    // User changed mind - invoke GUI path
+    handleGuiPath(pluginName, complexityScore);
+  } else if (nextChoice === "2") {
+    // Test in DAW
+    console.log("\nInstructions for DAW testing:\n1. Build plugin\n2. Load in DAW\n3. Test parameters with generic UI\n\nReturn here when ready.");
+    // Re-present decision menu
+  } else if (nextChoice === "5" || nextChoice === "pause") {
+    console.log("\n⏸ Paused after headless editor generation. Resume with /continue");
+    return;
+  }
+  // ... handle other choices
+}
+```
+
+**Helper function: generateMinimalEditor()** (NEW):
+
+```typescript
+function generateMinimalEditor(pluginName: string) {
+  const templatePath = "plugins/TEMPLATE-HEADLESS-EDITOR";
+  const targetPath = `plugins/${pluginName}/Source`;
+
+  // Read template files
+  const headerTemplate = readFile(`${templatePath}/PluginEditor.h`);
+  const cppTemplate = readFile(`${templatePath}/PluginEditor.cpp`);
+
+  // Replace [PluginName] placeholders
+  const header = headerTemplate.replaceAll("[PluginName]", pluginName);
+  const cpp = cppTemplate.replaceAll("[PluginName]", pluginName);
+
+  // Write files
+  writeFile(`${targetPath}/PluginEditor.h`, header);
+  writeFile(`${targetPath}/PluginEditor.cpp`, cpp);
+
+  console.log(`✓ Generated minimal editor for ${pluginName}`);
+}
+```
+
+**Helper function: findLatestMockup():**
+
+```typescript
+function findLatestMockup(pluginName: string): string | null {
+  const mockupsDir = `plugins/${pluginName}/.ideas/mockups`;
+
+  if (!fileExists(mockupsDir)) {
+    return null;
+  }
+
+  // Look for finalized mockup (highest version number with -ui.html suffix)
+  const mockupFiles = listFiles(mockupsDir, "*.html");
+
+  // Filter for UI mockup files (v1-ui.html, v2-ui.html, etc.)
+  const uiMockups = mockupFiles.filter(f => f.match(/v\d+-ui\.html$/));
+
+  if (uiMockups.length === 0) {
+    return null;
+  }
+
+  // Sort by version number and return latest
+  const sorted = uiMockups.sort((a, b) => {
+    const versionA = parseInt(a.match(/v(\d+)/)[1]);
+    const versionB = parseInt(b.match(/v(\d+)/)[1]);
+    return versionB - versionA; // Descending order
+  });
+
+  return `${mockupsDir}/${sorted[0]}`;
+}
 ```
 
 **CRITICAL: Do NOT proceed to Stage 5 if tests fail.**

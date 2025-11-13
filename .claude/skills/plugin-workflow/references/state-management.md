@@ -146,9 +146,20 @@ What would you like to do?
 
 These functions are retained for fallback use when subagent doesn't update state.
 
-### updateHandoff(pluginName, stage, completed, nextSteps, complexityScore, phased, nextAction, nextPhase)
+### updateHandoff(pluginName, stage, completed, nextSteps, complexityScore, phased, nextAction, nextPhase, guiType)
 
 **Purpose:** Update .continue-here.md with current workflow state.
+
+**Parameters:**
+- `pluginName`: Plugin identifier
+- `stage`: Current stage number (0-5)
+- `completed`: Description of what was completed
+- `nextSteps`: Array of next action items
+- `complexityScore`: Numeric complexity (used for routing)
+- `phased`: Boolean - is this a phased implementation?
+- `nextAction`: Optional - specific next action identifier
+- `nextPhase`: Optional - next phase number (for phased workflows)
+- `guiType`: Optional - "headless" or "webview" (NEW in GUI-Optional Flow)
 
 **Implementation:**
 ```bash
@@ -189,9 +200,53 @@ sed -i '' "s|parameter_spec: sha256:.*|parameter_spec: ${PARAM_SHA}|" "$HANDOFF_
 sed -i '' "s|architecture: sha256:.*|architecture: ${ARCH_SHA}|" "$HANDOFF_FILE"
 sed -i '' "s|plan: sha256:.*|plan: ${PLAN_SHA}|" "$HANDOFF_FILE"
 
+# Update gui_type if provided (NEW in GUI-Optional Flow)
+if [ -n "$GUI_TYPE" ]; then
+  # Check if gui_type field exists
+  if grep -q "^gui_type:" "$HANDOFF_FILE"; then
+    # Update existing field
+    sed -i '' "s/^gui_type: .*/gui_type: ${GUI_TYPE}/" "$HANDOFF_FILE"
+  else
+    # Add field after orchestration_mode
+    sed -i '' "/^orchestration_mode:/a\\
+gui_type: ${GUI_TYPE}
+" "$HANDOFF_FILE"
+  fi
+fi
+
 # Append to "Completed So Far" section
 echo "- **Stage ${NEW_STAGE}:** ${COMPLETED}" >> "$HANDOFF_FILE"
 ```
+
+**.continue-here.md format with gui_type field:**
+
+```yaml
+---
+plugin: PluginName
+stage: 4
+phase: null
+status: complete
+last_updated: 2025-11-13
+complexity_score: 2.5
+phased_implementation: false
+orchestration_mode: true
+gui_type: headless  # NEW: "headless" or "webview" (optional, defaults to "webview" if missing)
+next_action: run_validation
+next_phase: null
+contract_checksums:
+  creative_brief: sha256:abc...
+  parameter_spec: sha256:def...
+  architecture: sha256:ghi...
+  plan: sha256:jkl...
+---
+```
+
+**gui_type field specification:**
+- **Values:** "headless" | "webview"
+- **Purpose:** Track which GUI implementation path was chosen
+- **Set by:** handleHeadlessPath() (Stage 3 → 4 transition) or handleGuiPath()
+- **Used by:** plugin-improve skill (detects headless plugins and offers "Create custom UI" option)
+- **Backward compatibility:** If field missing, defaults to "webview" (existing behavior)
 
 **Called by:**
 - fallbackStateUpdate() when subagent verification fails
