@@ -32,21 +32,23 @@ ELSE:
   Log: "State updated by subagent, verified"
 ```
 
-### Step 3: Invoke Validation (Stages 1-3 only)
+### Step 3: Invoke Validation (ALL Stages 1-3)
 
 ```javascript
-IF currentStage in [1, 2, 3]:
-  Log: "Invoking validation-agent for semantic review..."
-  validationResult = invokeValidationAgent(pluginName, currentStage)
-  validation = parseValidationReport(validationResult)
+// Validation runs for ALL stages (1, 2, 3)
+Log: "Invoking validation-agent with enhanced runtime validation..."
+validationResult = invokeValidationAgent(pluginName, currentStage)
+validation = parseValidationReport(validationResult)
 
-  IF validation.status == "FAIL" AND validation.continue_to_next_stage == false:
-    presentValidationFailureMenu(validation)
-    BLOCK progression until user resolves issues
-  ELSE:
-    Log: `✓ Validation ${validation.status}: ${validation.recommendation}`
+// BLOCKING on runtime failures
+IF validation.status == "FAIL" AND validation.continue_to_next_stage == false:
+  presentValidationFailureMenu(validation)
+  BLOCK progression until user resolves issues
+ELSE IF validation.status == "WARNING":
+  Log: `⚠️  Validation WARNING: ${validation.recommendation}`
+  presentWarningMenu(validation)  // User decides: fix now or continue
 ELSE:
-  Log: "Validation skipped for stage ${currentStage}"
+  Log: `✓ Validation ${validation.status}: ${validation.recommendation}`
 ```
 
 ### Step 4: Commit Stage
@@ -72,13 +74,17 @@ BLOCK if any step failed - present retry menu before continuing.
 ```javascript
 handleCheckpoint({ stage, completionStatement, pluginName, workflowMode, hasErrors })
 
-IF workflowMode == "express" AND currentStage < 4 AND hasErrors == false:
+IF workflowMode == "express" AND currentStage < 3 AND hasErrors == false:
   # Express mode: Auto-progress to next stage
   displayProgressMessage(currentStage, nextStage)
   Log: "Express mode: Auto-progressing to Stage ${nextStage}"
   # No menu, no wait, continue immediately
+ELSE IF currentStage == 3:
+  # Final stage - always present completion menu (even in express mode)
+  presentCompletionMenu({ pluginName })
+  WAIT for user response (blocking)
 ELSE:
-  # Manual mode OR final stage OR error occurred
+  # Manual mode OR error occurred
   presentDecisionMenu({ stage, completionStatement, pluginName })
   WAIT for user response (blocking)
 ```
@@ -91,7 +97,7 @@ After steps 1-5 complete, verify all succeeded:
 CHECKPOINT VERIFICATION:
 ✓ Step 1: State update verified (subagent updated: true)
 ✓ Step 2: Fallback skipped (not needed) OR Fallback completed
-✓ Step 3: Validation passed (or skipped for Stage 4)
+✓ Step 3: Validation passed
 ✓ Step 4: Git commit [commit-hash]
 ✓ Step 5: All checkpoint steps validated
 
@@ -106,7 +112,7 @@ IF any failed:
 
 - **Step 1:** Check `result.stateUpdated == true` AND `.continue-here.md` stage field matches
 - **Step 2:** If fallback ran, verify `.continue-here.md` and `PLUGINS.md` updated
-- **Step 3:** If validation ran, check `validationReport.status` (PASS/WARNING acceptable, FAIL blocks)
+- **Step 3:** Validation ran, check `validationReport.status` (PASS/WARNING acceptable, FAIL with continue_to_next_stage=false blocks)
 - **Step 4:** `git log -1 --oneline` contains stage reference
 - **Step 5:** All state files consistent
 
@@ -119,7 +125,18 @@ Incomplete checkpoints cause state corruption:
 
 ## Applies To
 
-- **Simple plugins** (complexity ≤2): After stages 1, 2, 3, 4
-- **Complex plugins** (complexity ≥3): After stages 1 AND after EACH DSP/GUI phase (2.1, 2.2, 2.3+, 3.1, 3.2, 3.3+), then 4
+- **Simple plugins** (complexity ≤2): After stages 1, 2, 3
+- **Complex plugins** (complexity ≥3): After stage 1 AND after EACH DSP/GUI phase (2.1, 2.2, 2.3+, 3.1, 3.2, 3.3+)
 
 Note: Phase count determined by plan.md (varies by complexity)
+
+## Stage 3 Completion Special Handling
+
+After Stage 3 completes successfully:
+1. Update PLUGINS.md status to ✅ Working
+2. Delete .continue-here.md handoff file (workflow complete)
+3. Present completion menu with installation options:
+   - Install to DAW
+   - Make improvements
+   - Package for distribution
+   - Other

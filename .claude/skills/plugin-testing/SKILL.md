@@ -1,6 +1,6 @@
 ---
 name: plugin-testing
-description: Validates audio plugins through automated tests, pluginval, or manual DAW testing. Use when testing completed plugins (Stage 5+), after bug fixes, or when user mentions test, validate, validation, pluginval, stability, automated tests, run tests, check plugin, or quality assurance
+description: Validates audio plugins through automated tests, pluginval, or manual DAW testing. Use for MANUAL testing via /test command. Note - Automatic validation now built into workflow (validation-agent runs after each stage). This skill is for manual testing only, after bug fixes, or when user mentions test, validate, validation, pluginval, stability, automated tests, run tests, check plugin, or quality assurance.
 allowed-tools:
   - Read
   - Bash
@@ -10,6 +10,16 @@ allowed-tools:
 # plugin-testing Skill
 
 **Purpose:** Catch crashes, parameter issues, and state bugs in 2 minutes with automated tests.
+
+**IMPORTANT:** Automatic validation is now built into the workflow. validation-agent runs automatically after each implementation stage (Stages 1-3) with compile-time and runtime tests. Validation is blocking - errors must be fixed before progressing.
+
+**This skill is for MANUAL testing only:**
+- After completing workflow (via `/test` command)
+- After bug fixes (via `/improve`)
+- For additional verification beyond automatic validation
+- For manual DAW testing workflows
+
+**Was previously invoked by:** plugin-workflow after Stages 3, 4, 5 (DEPRECATED - now handled by validation-agent)
 
 ## Workflow Overview
 
@@ -266,7 +276,7 @@ Use format from `assets/report-templates.md#test-log-format`
 
 Update `.continue-here.md`:
 - Set stage: "testing_complete"
-- Set next_step based on test results (Stage 4 if passed, investigation if failed)
+- Set next_step based on test results (installation if passed, investigation if failed)
 - Record last_tested: [timestamp]
 - Record test_mode: [1/2/3]
 
@@ -327,13 +337,15 @@ Testing is successful when:
 - `/test [PluginName] manual` → Direct to Mode 3 (DAW testing)
 
 **Skills:**
-- `plugin-workflow` → After Stages 4, 5, 6 (validation checkpoints)
 - `plugin-improve` → After implementing bug fixes or features
+- ~~`plugin-workflow`~~ → DEPRECATED (now uses validation-agent for automatic testing)
 
 **Natural Language:**
 - "Test [PluginName]"
 - "Run validation on [PluginName]"
 - "Check [PluginName] for crashes"
+
+**Note:** For workflow implementation testing, validation-agent runs automatically after each stage. This skill is only needed for manual testing outside the workflow.
 
 **Invokes:**
 

@@ -113,6 +113,9 @@ grep "^### $PLUGIN_NAME$" PLUGINS.md
      [PluginName] is still in development (Stage [N]).
      Complete the workflow first with /continue [PluginName].
      Cannot use /improve on in-progress plugins.
+
+     Note: The workflow now has 3 stages with automatic validation.
+     Stage 1-3 complete = plugin ready for improvement.
      ```
    - If status = 💡 Ideated → BLOCK with message:
      ```

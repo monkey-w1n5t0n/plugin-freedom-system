@@ -16,7 +16,7 @@ async function dispatchStage(pluginName, stageNumber) {
     return { status: 'blocked', reason: preconditionCheck.reason }
   }
 
-  // ALWAYS invoke subagents via Task tool for stages 1-4
+  // ALWAYS invoke subagents via Task tool for stages 1-3
   switch(stageNumber) {
     case 1:
       // Invoke foundation-shell-agent subagent
@@ -39,21 +39,19 @@ async function dispatchStage(pluginName, stageNumber) {
         contracts: loadContracts(pluginName),
         requiredReading: 'juce8-critical-patterns.md'
       })
-    case 4:
-      // Can run directly or invoke validator subagent
-      return executeStage4Validation(pluginName)  // See references/stage-4-validation.md
     default:
-      return { status: 'error', reason: `Invalid stage: ${stageNumber}` }
+      return { status: 'error', reason: `Invalid stage: ${stageNumber}. Valid stages: 1-3` }
   }
 }
 ```
 
 ## Key Principles
 
-1. **Always delegate stages 1-4** - Use Task tool to invoke subagents
+1. **Always delegate stages 1-3** - Use Task tool to invoke subagents
 2. **Pass contracts and Required Reading** - Every subagent receives architecture.md, plan.md, and juce8-critical-patterns.md
 3. **Check preconditions first** - Validate contracts exist before dispatching
-4. **Stage 3 flexibility** - Can run directly in orchestrator or via validator subagent
+4. **Run validation after each stage** - validation-agent runs automatically with enhanced runtime validation
+5. **Block on validation failures** - If validation fails with continue_to_next_stage=false, workflow stops
 
 ## Integration
 

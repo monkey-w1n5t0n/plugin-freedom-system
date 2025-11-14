@@ -33,8 +33,8 @@ When technical terms appear in the system, they refer to these concepts:
 
 **Internal vs User-Facing:**
 
-- **Internal:** Stage numbers (1-4) used for routing logic, never shown to users
-- **User-facing:** Milestone names (Build System Ready, Audio Engine Working, etc.) shown in all menus and messages
+- **Internal:** Stage numbers (1-3) used for routing logic, never shown to users
+- **User-facing:** Milestone names (Build System Ready, Audio Engine Working, UI Integrated) shown in all menus and messages
 
 When these terms appear in the system, the plain-language equivalent will be shown on first use:
 
@@ -79,6 +79,7 @@ When these terms appear in the system, the plain-language equivalent will be sho
 4. **Instructed routing** - Commands expand to prompts, Claude invokes skills
 5. **Required Reading injection** - Critical patterns (`juce8-critical-patterns.md`) are mandatory reading for all subagents to prevent repeat mistakes
 6. **Proactive validation** - Errors caught early (dependencies at start, brief sync before Stage 1, silent failures at compile-time)
+7. **Automatic continuous validation** - validation-agent runs after each implementation stage (Stages 1-3) with enhanced runtime validation (compile-time + pluginval tests). Validation is blocking - errors must be fixed before progressing to next stage. No optional testing.
 
 ## Proactive Validation (Error Prevention)
 
@@ -151,7 +152,7 @@ Auto-progress to next stage without menu:
 
 [Stage execution begins immediately]
 
-**Final menu always appears** (even in express mode) after Stage 4.
+**Final menu always appears** (even in express mode) after Stage 3 completes and validation passes.
 
 ### Workflow Mode Configuration
 
@@ -170,7 +171,7 @@ Auto-progress to next stage without menu:
 
 **Mode options:**
 
-- **"manual"** (default): Present decision menus at all checkpoints (Stages 0, 1, 2, 3, 4)
+- **"manual"** (default): Present decision menus at all checkpoints (Stages 0, 1, 2, 3)
 - **"express"**: Auto-progress through stages without menus
 
 **Command-line overrides:**
@@ -188,16 +189,17 @@ Auto-progress to next stage without menu:
 
 **Auto-actions:**
 
-- `auto_test`: Run pluginval automatically after Stage 4
-- `auto_install`: Install to system folders after tests pass
+- `auto_test`: DEPRECATED (validation now automatic during workflow)
+- `auto_install`: Install to system folders after Stage 3 validation passes
 - `auto_package`: Create PKG installer after installation
 
 See `.claude/preferences-README.md` for complete documentation.
 
 ### Checkpoint Applies To
 
-- All workflow stages (0-6)
+- All workflow stages (0-3)
 - All subagent completions
+- Validation-agent completions (after each stage)
 - Contract creation (creative-brief, mockups, parameter-spec)
 - Any point where user needs to decide next action
 
@@ -205,7 +207,7 @@ Do NOT use AskUserQuestion tool for decision menus - use inline numbered lists a
 
 ## Subagent Invocation Protocol
 
-All implementation stages use the dispatcher pattern. The system uses milestone names for user-facing messages and internal stage numbers (0-4) for routing:
+All implementation stages use the dispatcher pattern. The system uses milestone names for user-facing messages and internal stage numbers (0-3) for routing:
 
 **Implementation Milestones:**
 
@@ -216,19 +218,18 @@ All implementation stages use the dispatcher pattern. The system uses milestone 
 - **Build System Ready** (Stage 1) → foundation-shell-agent (plugin-workflow skill)
   - Generates CMakeLists.txt, project structure
   - Implements all APVTS parameters from parameter-spec.md
+  - Followed by validation-agent (automatic, blocking)
 
 - **Audio Engine Working** (Stage 2) → dsp-agent (plugin-workflow skill)
   - Implements processBlock and DSP algorithms
   - Connects parameters to audio processing
+  - Followed by validation-agent (automatic, blocking)
 
 - **UI Integrated** (Stage 3) → gui-agent (plugin-workflow skill)
   - Creates WebView interface from mockup
   - Binds UI controls to APVTS parameters
-
-- **Plugin Complete** (Stage 4) → validation-agent (plugin-workflow skill)
-  - Runs pluginval testing
-  - Creates factory presets
-  - Final verification
+  - Followed by validation-agent (automatic, blocking with runtime tests)
+  - After validation passes: Plugin complete, ready to install
 
 The orchestrating skills delegate to subagents, they do **not** implement directly.
 
@@ -271,7 +272,7 @@ After Stage 2 (DSP) completes, user chooses:
 **Headless path:**
 
 - Generates minimal PluginEditor (shows plugin name, instructs to use DAW controls)
-- Proceeds directly to Stage 4 (Validation)
+- Proceeds to Stage 3 validation (automatic)
 - Plugin marked as v1.0.0 (Headless)
 - All parameters exposed to DAW automation
 - No custom UI overhead (smaller binary, faster compile)
@@ -327,7 +328,7 @@ After Stage 2 (DSP) completes, user chooses:
 **Lifecycle:**
 
 - `/dream` - Ideate new plugin concept
-- `/implement [Name]` - Build plugin through 5-stage workflow (0, 2-4)
+- `/implement [Name]` - Build plugin through 3-stage workflow (1-3) with automatic validation
 - `/continue [Name]` - Resume paused workflow
 - `/improve [Name]` - Fix bugs or add features (with regression testing)
 - `/reconcile [Name]` - Reconcile state between planning and implementation
@@ -356,7 +357,7 @@ After Stage 2 (DSP) completes, user chooses:
 - `troubleshooting/parameter-issues/` - APVTS and state management
 - `troubleshooting/validation-problems/` - pluginval failures
 - `troubleshooting/patterns/` - Common patterns and solutions
-- `troubleshooting/patterns/juce8-critical-patterns.md` - **REQUIRED READING** for all subagents (Stages 1-4)
+- `troubleshooting/patterns/juce8-critical-patterns.md` - **REQUIRED READING** for all subagents (Stages 1-3)
 
 ### Scripts
 

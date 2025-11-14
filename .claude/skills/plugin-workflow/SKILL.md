@@ -1,8 +1,8 @@
 ---
 name: plugin-workflow
-description: Orchestrates JUCE plugin implementation through stages 2-5 (Foundation, DSP, GUI, Validation) using subagent delegation. Use when implementing plugins after planning completes, or when resuming with /continue command. Invoked by /implement command.
+description: Orchestrates JUCE plugin implementation through stages 1-3 (Foundation, DSP, GUI) using subagent delegation with automatic validation after each stage. Use when implementing plugins after planning completes, or when resuming with /continue command. Invoked by /implement command.
 allowed-tools:
-  - Task # REQUIRED - All stages 2-5 MUST invoke subagents
+  - Task # REQUIRED - All stages 1-3 MUST invoke subagents
   - Bash # For git commits
   - Read # For contracts
   - Write # For documentation
@@ -10,47 +10,50 @@ allowed-tools:
 preconditions:
   - architecture.md must exist (from /plan)
   - plan.md must exist (from /plan)
-  - Status must be 🚧 Stage 0 (complete) OR resuming from 🚧 Stage 1+
+  - Status must be 🚧 Planning Complete OR resuming from 🚧 Stage 1+
   - Plugin must NOT be ✅ Working or 📦 Installed (use /improve instead)
 ---
 
 # plugin-workflow Skill
 
-**Purpose:** Pure orchestrator for stages 2-5 of JUCE plugin implementation. This skill delegates to specialized subagents and presents decision menus after each stage completes.
+**Purpose:** Pure orchestrator for stages 1-3 of JUCE plugin implementation with automatic validation after each stage. This skill delegates to specialized subagents and validation-agent for continuous quality assurance.
 
 ## Overview
 
 Implementation milestones:
-- **Build System Ready** (Stage 2): Create build system and implement parameters (foundation-shell-agent)
-- **Audio Engine Working** (Stage 3): Implement audio processing (dsp-agent)
-- **UI Integrated** (Stage 4): Connect WebView interface to audio engine (gui-agent)
-- **Plugin Complete** (Stage 5): Factory presets, validation, and final polish (validation-agent)
+- **Build System Ready** (Stage 1): Create build system and implement parameters (foundation-shell-agent)
+- **Audio Engine Working** (Stage 2): Implement audio processing (dsp-agent)
+- **UI Integrated** (Stage 3): Connect WebView interface to audio engine (gui-agent)
 
-Stage 1 (Research & Planning) is handled by `plugin-planning` skill.
+Stage 0 (Research & Planning) is handled by `plugin-planning` skill.
+
+After Stage 3 completes, plugin is ready for installation (no separate validation stage - validation is automatic and continuous).
 
 ## Delegation Protocol
 
-**CRITICAL:** Stages 2-5 MUST invoke subagents via Task tool. This skill is a pure orchestrator and NEVER implements plugin code directly.
+**CRITICAL:** Stages 1-3 MUST invoke subagents via Task tool. This skill is a pure orchestrator and NEVER implements plugin code directly.
 
 **Delegation sequence for every stage:**
 1. Load contracts in parallel (architecture.md, plan.md, parameter-spec.md, creative-brief.md)
 2. Read Required Reading (juce8-critical-patterns.md) once at workflow start
 3. Construct minimal prompt with plugin name + stage + Required Reading
 4. Invoke subagent via Task tool
-5. After subagent returns, invoke validation-agent (stages 2-4 only)
+5. After subagent returns, invoke validation-agent (ALL stages 1-3)
 6. Execute checkpoint protocol (see references/checkpoint-protocol.md)
 
 **Stage routing:**
-- Stage 2 → foundation-shell-agent
-- Stage 3 → dsp-agent
-- Stage 4 → gui-agent
-- Stage 5 → validation-agent (or direct execution)
+- Stage 1 → foundation-shell-agent
+- Stage 2 → dsp-agent
+- Stage 3 → gui-agent
+
+**Validation routing:**
+After each stage completes, validation-agent runs automatically with enhanced runtime validation (compile-time + runtime tests). If validation fails with `continue_to_next_stage: false`, workflow BLOCKS until issues resolved.
 
 ## Preconditions
 
-Before starting Stage 2, verify these contract files exist:
-- `plugins/$PLUGIN_NAME/.ideas/architecture.md` (from Stage 1)
-- `plugins/$PLUGIN_NAME/.ideas/plan.md` (from Stage 1)
+Before starting Stage 1, verify these contract files exist:
+- `plugins/$PLUGIN_NAME/.ideas/architecture.md` (from Stage 0)
+- `plugins/$PLUGIN_NAME/.ideas/plan.md` (from Stage 0)
 - `plugins/$PLUGIN_NAME/.ideas/creative-brief.md` (from ideation)
 - `plugins/$PLUGIN_NAME/.ideas/parameter-spec.md` (from UI mockup finalization)
 
@@ -58,7 +61,7 @@ Before starting Stage 2, verify these contract files exist:
 Block with message: "Draft parameters found, but full specification required. Complete UI mockup workflow to generate parameter-spec.md. Run: /dream [PluginName] → option 2 (Full UI mockup first)"
 
 **If contracts missing:**
-Block and instruct user to run `/plan [PluginName]` to complete Stage 1.
+Block and instruct user to run `/plan [PluginName]` to complete Stage 0.
 
 See [references/precondition-checks.md](references/precondition-checks.md) for implementation.
 
@@ -86,8 +89,8 @@ Determine whether to auto-progress (express mode) or present menus (manual mode)
 
 **Express mode behavior:**
 - Auto-progress through stages without menus
-- Drops to manual on ANY error (build failures, test failures, etc.)
-- Final menu always appears after Stage 5
+- Drops to manual on ANY error (build failures, validation failures, etc.)
+- Final menu always appears after Stage 3 (plugin complete)
 
 See [references/workflow-mode.md](references/workflow-mode.md) for implementation.
 
@@ -98,31 +101,33 @@ See [references/workflow-mode.md](references/workflow-mode.md) for implementatio
 **Dispatch flow:**
 1. Verify state integrity → BLOCK if corrupted (exit 2 → run /reconcile)
 2. Check preconditions → BLOCK if failed
-3. **Automatic brief sync** (before Stage 2 only, if mockup exists) → See [references/creative-brief-sync.md](references/creative-brief-sync.md)
+3. **Automatic brief sync** (before Stage 1 only, if mockup exists) → See [references/creative-brief-sync.md](references/creative-brief-sync.md)
 4. Route to subagent based on stage
 5. Pass contracts and Required Reading to subagent
 6. Wait for subagent completion
-7. Execute checkpoint protocol
+7. Invoke validation-agent with enhanced runtime validation
+8. Execute checkpoint protocol
 
 See [references/dispatcher-pattern.md](references/dispatcher-pattern.md) for full algorithm.
 
 ## Phase-Aware Dispatch
 
-For Stages 3-4 with complexity ≥3, use phase-aware dispatch to incrementally implement complex plugins.
+For Stages 2-3 with complexity ≥3, use phase-aware dispatch to incrementally implement complex plugins.
 
 **When to use:**
-- Stage 3 (DSP) or Stage 4 (GUI)
+- Stage 2 (DSP) or Stage 3 (GUI)
 - Complexity score ≥3 (from plan.md)
-- plan.md contains phase markers (### Phase 3.X or ### Phase 4.X)
+- plan.md contains phase markers (### Phase 2.X or ### Phase 3.X)
 
 **How it works:**
 1. Detect phases by scanning plan.md for phase markers
-2. Loop through phases sequentially (Phase 3.1 → 3.2 → 3.3...)
+2. Loop through phases sequentially (Phase 2.1 → 2.2 → 2.3...)
 3. Invoke subagent once per phase with phase-specific prompt
-4. Execute checkpoint protocol after each phase
-5. Present decision menu showing progress ("Phase 2 of 4 complete")
+4. Run validation-agent after each phase
+5. Execute checkpoint protocol after each phase
+6. Present decision menu showing progress ("Phase 2 of 4 complete")
 
-**CRITICAL:** Never send "Implement ALL phases" to subagent. This caused DrumRoulette Stage 3 compilation errors. Phase-aware dispatch is MANDATORY for complex plugins.
+**CRITICAL:** Never send "Implement ALL phases" to subagent. This caused DrumRoulette Stage 2 compilation errors. Phase-aware dispatch is MANDATORY for complex plugins.
 
 See [references/phase-aware-dispatch.md](references/phase-aware-dispatch.md) for detailed algorithm.
 
@@ -132,24 +137,30 @@ After EVERY subagent return, execute this 6-step sequence:
 
 1. **Verify state update:** Check subagent updated .continue-here.md and PLUGINS.md
 2. **Fallback state update:** If verification fails, orchestrator updates state
-3. **Invoke validation:** Run validation-agent for stages 2-4 (advisory)
+3. **Invoke validation:** Run validation-agent for ALL stages 1-3 (BLOCKING on runtime failures)
 4. **Commit stage:** Auto-commit all changes with git
 5. **Verify checkpoint:** Validate all steps completed successfully
 6. **Handle checkpoint:** Present menu (manual mode) or auto-progress (express mode)
 
 **Checkpoint applies to:**
-- Simple plugins (complexity ≤2): After stages 2, 3, 4, 5
-- Complex plugins (complexity ≥3): After stage 2 AND after EACH DSP/GUI phase, then 5
+- Simple plugins (complexity ≤2): After stages 1, 2, 3
+- Complex plugins (complexity ≥3): After stage 1 AND after EACH DSP/GUI phase (2.X, 3.X)
 
 See [references/checkpoint-protocol.md](references/checkpoint-protocol.md) for implementation.
 
 ## Validation Integration
 
-Stages 2-4 invoke validation-agent for semantic review after subagent completes:
-- Advisory only (doesn't block progression unless FAIL + continue_to_next_stage=false)
-- Checks contracts match implementation
+Stages 1-3 invoke validation-agent with enhanced runtime validation after subagent completes:
+- **BLOCKING on runtime failures:** If `status: FAIL` and `continue_to_next_stage: false`, workflow stops
+- Runs compile-time checks (contract matching, implementation correctness)
+- Runs runtime tests (load plugin, process audio, parameter changes) when binary available
 - Returns JSON report with status, checks, recommendation
 - Max 500 tokens per report
+
+**Blocking behavior:**
+- If validation passes (PASS/WARNING): Continue to next stage
+- If validation fails with `continue_to_next_stage: true`: Present warning, allow continuation
+- If validation fails with `continue_to_next_stage: false`: BLOCK workflow, present error menu
 
 See [references/validation-integration.md](references/validation-integration.md) for functions.
 
@@ -160,7 +171,7 @@ Subagents update state files AND return JSON report:
 ```json
 {
   "status": "success" | "error",
-  "stage": 2-5,
+  "stage": 1-3,
   "completionStatement": "...",
   "filesCreated": [...],
   "nextSteps": [...],
@@ -180,7 +191,7 @@ See [references/state-management.md](references/state-management.md) for fallbac
 
 ## Required Reading Injection
 
-All subagents (stages 2-5) receive `troubleshooting/patterns/juce8-critical-patterns.md` to prevent repeat mistakes.
+All subagents (stages 1-3) receive `troubleshooting/patterns/juce8-critical-patterns.md` to prevent repeat mistakes.
 
 **Implementation:**
 1. Read juce8-critical-patterns.md ONCE at workflow start
@@ -191,17 +202,16 @@ All subagents (stages 2-5) receive `troubleshooting/patterns/juce8-critical-patt
 
 Each stage has detailed documentation in references/:
 
-- [stage-2-foundation-shell.md](references/stage-2-foundation-shell.md) - foundation-shell-agent prompt template
-- [stage-3-dsp.md](references/stage-3-dsp.md) - dsp-agent prompt template
-- [stage-4-gui.md](references/stage-4-gui.md) - gui-agent prompt template
-- [stage-5-validation.md](references/stage-5-validation.md) - validation-agent prompt template
+- [stage-1-foundation-shell.md](references/stage-1-foundation-shell.md) - foundation-shell-agent prompt template
+- [stage-2-dsp.md](references/stage-2-dsp.md) - dsp-agent prompt template
+- [stage-3-gui.md](references/stage-3-gui.md) - gui-agent prompt template
 - [state-management.md](references/state-management.md) - State functions
 - [dispatcher-pattern.md](references/dispatcher-pattern.md) - Routing logic
 - [precondition-checks.md](references/precondition-checks.md) - Contract validation
 - [phase-aware-dispatch.md](references/phase-aware-dispatch.md) - Complex plugin handling
 - [workflow-mode.md](references/workflow-mode.md) - Express vs manual mode
 - [checkpoint-protocol.md](references/checkpoint-protocol.md) - 6-step checkpoint sequence
-- [validation-integration.md](references/validation-integration.md) - Validation-agent functions
+- [validation-integration.md](references/validation-integration.md) - Validation-agent functions (enhanced runtime validation)
 - [creative-brief-sync.md](references/creative-brief-sync.md) - Automatic brief update from mockup
 - [error-handling.md](references/error-handling.md) - Error patterns and recovery
 - [integration-contracts.md](references/integration-contracts.md) - Component contracts
@@ -210,18 +220,17 @@ Each stage has detailed documentation in references/:
 
 **Invoked by:**
 - `/implement` command (after plugin-planning completes)
-- `/continue` command (for stages 2-5)
+- `/continue` command (for stages 1-3)
 - `context-resume` skill (when resuming implementation)
 
 **Invokes via Task tool:**
-- `foundation-shell-agent` (Stage 2) - REQUIRED
-- `dsp-agent` (Stage 3) - REQUIRED
-- `gui-agent` (Stage 4) - REQUIRED
-- `validation-agent` (Stages 2-5) - Advisory
+- `foundation-shell-agent` (Stage 1) - REQUIRED
+- `dsp-agent` (Stage 2) - REQUIRED
+- `gui-agent` (Stage 3) - REQUIRED
+- `validation-agent` (Stages 1-3) - REQUIRED, BLOCKING on runtime failures
 
 **Also invokes:**
 - `build-automation` skill (build verification)
-- `plugin-testing` skill (validation after stages)
 - `plugin-lifecycle` skill (if user chooses to install)
 
 **Reads (contracts):**
@@ -229,16 +238,17 @@ Each stage has detailed documentation in references/:
 
 **Creates:**
 - .continue-here.md (handoff file)
-- CHANGELOG.md (Stage 5)
-- Presets/ directory (Stage 5)
 
 **Updates:**
 - PLUGINS.md (status after each stage)
 - .continue-here.md (after each stage)
 
+**Deletes after Stage 3:**
+- .continue-here.md (workflow complete, plugin ready for installation)
+
 ## Error Handling
 
-**Contract files missing before Stage 2:**
+**Contract files missing before Stage 1:**
 Block and instruct user to run `/plan [PluginName]`.
 
 **Build fails during subagent execution:**
@@ -251,8 +261,11 @@ Subagent returns error. Present menu:
 **State mismatch detected (exit 2):**
 BLOCKING error - user must run `/reconcile [PluginName]` to fix.
 
-**Validation fails:**
-Present menu with investigation options. Don't auto-proceed unless validation allows.
+**Validation fails with continue_to_next_stage: false:**
+BLOCKING error. Present menu with investigation options. Workflow cannot proceed until issues resolved.
+
+**Validation fails with continue_to_next_stage: true:**
+Present warning, allow user to decide whether to continue or fix issues first.
 
 See [references/error-handling.md](references/error-handling.md) for detailed patterns.
 
@@ -285,12 +298,13 @@ Choose (1-5): _
 ## Success Criteria
 
 Workflow succeeds when:
-- All subagents (stages 2-4) invoked successfully via Task tool
+- All subagents (stages 1-3) invoked successfully via Task tool
 - Plugin compiles without errors at each stage
-- All stages completed in sequence (2 → 3 → 4 → 5)
+- All validation passes (or explicitly allowed to continue with warnings)
+- All stages completed in sequence (1 → 2 → 3)
 - Decision menus presented after EVERY stage (manual mode)
-- PLUGINS.md updated to ✅ Working after Stage 5
-- Handoff file updated after each stage
+- PLUGINS.md updated to ✅ Working after Stage 3
+- Handoff file deleted after Stage 3 (workflow complete)
 - Git history shows atomic commits for each stage
 
 ## Anti-Patterns
@@ -302,20 +316,24 @@ Common pitfalls to AVOID:
 - ✓ ALWAYS use Task tool to invoke appropriate subagent
 
 **CRITICAL:**
-- ❌ Sending "Implement ALL phases" to subagent for Stages 3-4
+- ❌ Sending "Implement ALL phases" to subagent for Stages 2-3
 - ✓ ALWAYS detect phases in plan.md and loop through them one at a time
+
+**CRITICAL:**
+- ❌ Proceeding to next stage when validation fails with continue_to_next_stage: false
+- ✓ BLOCK workflow and present error menu until issues resolved
 
 **HIGH:**
 - ❌ Not verifying subagent updated state
 - ✓ Check stateUpdated field, verify .continue-here.md changed, fallback if needed
 
 **HIGH:**
-- ❌ Skipping phase detection for Stages 3-4 when complexity ≥3
+- ❌ Skipping phase detection for Stages 2-3 when complexity ≥3
 - ✓ Read plan.md to check for phases BEFORE invoking dsp-agent or gui-agent
 
-**MEDIUM:**
-- ❌ Proceeding to next stage when tests fail
-- ✓ Present investigation menu and wait for user decision
+**HIGH:**
+- ❌ Skipping validation after subagent completes
+- ✓ ALWAYS invoke validation-agent after each stage (1-3)
 
 **MEDIUM:**
 - ❌ Not injecting Required Reading to subagents

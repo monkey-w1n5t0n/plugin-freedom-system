@@ -47,10 +47,10 @@ Research and design the technical architecture:
 
 Transform your specifications into a fully functional plugin through an automated workflow:
 
-- **Build System Ready**: Project structure, CMake configuration, and all parameters implemented
-- **Audio Engine Working**: DSP algorithms and audio processing complete
-- **UI Integrated**: WebView interface connected to audio engine (or skip for headless plugins)
-- **Plugin Complete**: Automated testing, factory presets, and final validation
+- **Build System Ready** (Stage 1): Project structure, CMake configuration, and all parameters implemented - validated automatically
+- **Audio Engine Working** (Stage 2): DSP algorithms and audio processing complete - validated automatically
+- **UI Integrated** (Stage 3): WebView interface connected to audio engine (or skip for headless plugins) - validated automatically with runtime tests
+- After Stage 3 validation passes: Plugin complete, ready to install
 
 ### 4. Deploy & Iterate
 
@@ -86,7 +86,9 @@ Plugins can skip custom UI and ship as "headless" plugins using DAW-provided con
 
 ### Quality Assurance
 
-- Automated pluginval testing (VST3/AU validation)
+- Automatic validation after each stage (compile-time + runtime tests)
+- validation-agent runs pluginval automatically (VST3/AU validation)
+- Validation is blocking - errors must be fixed before progressing
 - Regression testing on modifications
 - Backup verification before destructive operations
 - Build failure detection and troubleshooting
@@ -145,10 +147,10 @@ Every plugin has immutable contracts in `plugins/[Name]/.ideas/`:
 
 Each implementation stage runs in a fresh subagent context:
 
-- `foundation-agent` (Stage 2) - Project structure
-- `shell-agent` (Stage 3) - Parameter management
-- `dsp-agent` (Stage 4) - Audio processing
-- `gui-agent` (Stage 5) - WebView UI
+- `foundation-shell-agent` (Stage 1) - Project structure and parameter management
+- `dsp-agent` (Stage 2) - Audio processing
+- `gui-agent` (Stage 3) - WebView UI
+- `validation-agent` (after each stage) - Automatic validation with runtime tests
 
 **No context accumulation**: Clean separation prevents cross-contamination and keeps token usage minimal.
 
@@ -254,7 +256,7 @@ All other dependencies (Xcode Command Line Tools, JUCE, CMake, Python, pluginval
 
 - `/dream` - Brainstorm concept, create creative brief, parameter spec, and UI mockups
 - `/plan` - Research and design DSP architecture and implementation strategy
-- `/implement [Name]` - Build plugin through automated workflow (Stages 2-6)
+- `/implement [Name]` - Build plugin through automated 3-stage workflow with continuous validation
 - `/continue [Name]` - Resume paused workflow
 - `/improve [Name]` - Modify completed plugin (with regression testing)
 
@@ -307,11 +309,11 @@ plugin-freedom-system/
 │   │   ├── troubleshooting-docs/     # Knowledge capture
 │   │   └── workflow-reconciliation/  # State consistency checks
 │   ├── agents/                       # Implementation subagents
-│   │   ├── research-planning-agent/  # Research Complete
-│   │   ├── foundation-shell-agent/   # Build System Ready
-│   │   ├── dsp-agent/                # Audio Engine Working
-│   │   ├── gui-agent/                # UI Integrated
-│   │   ├── validation-agent/         # Plugin Complete
+│   │   ├── research-planning-agent/  # Research Complete (Stage 0)
+│   │   ├── foundation-shell-agent/   # Build System Ready (Stage 1)
+│   │   ├── dsp-agent/                # Audio Engine Working (Stage 2)
+│   │   ├── gui-agent/                # UI Integrated (Stage 3)
+│   │   ├── validation-agent/         # Automatic validation (after each stage)
 │   │   ├── ui-design-agent/          # UI mockup design
 │   │   ├── ui-finalization-agent/    # UI implementation scaffolding
 │   │   └── troubleshoot-agent/       # Build failures

@@ -162,6 +162,15 @@ See **[references/error-recovery.md](references/error-recovery.md)** for all err
 2. `/continue [PluginName]` command → Triggers specific plugin resume
 3. Natural language: "resume [PluginName]", "continue working on [PluginName]"
 
+**Backward Compatibility:**
+
+Handles legacy handoffs with Stage 4 or Stage 5 references:
+- Stage 4 (old validation stage) → Maps to "Stage 3 complete, plugin validated, ready to install"
+- Stage 5 (old preset/finalization stage) → Maps to "Stage 3 complete, plugin validated, ready to install"
+- Detects old stage numbers during parsing (Step 2)
+- Automatically migrates to new workflow state
+- Presents clear explanation to user
+
 </integration>
 
 <integration>

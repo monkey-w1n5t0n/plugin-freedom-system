@@ -81,6 +81,212 @@ When flagging issues, reference specific pattern names from Required Reading in 
 
 This provides context and links findings to the knowledge base.
 
+## Runtime Validation
+
+validation-agent performs both semantic validation (code patterns) AND runtime validation (binary behavior) to ensure plugins work correctly. Runtime validation uses pluginval at appropriate test depths per stage.
+
+### Binary Detection
+
+Before running pluginval, locate plugin binaries from build artifacts:
+
+```bash
+# VST3 path
+VST3_PATH="build/plugins/{PluginName}/{PluginName}_artefacts/Release/VST3/{ProductName}.vst3"
+
+# AU path
+AU_PATH="build/plugins/{PluginName}/{PluginName}_artefacts/Release/AU/{ProductName}.component"
+
+# Check existence
+if [ -f "$VST3_PATH" ]; then
+  # Binary exists, run pluginval
+else
+  # Binary not found, skip runtime validation
+fi
+```
+
+If binaries don't exist, skip runtime validation gracefully (report in JSON: "pluginval skipped - no binary").
+
+### Tiered Pluginval Execution
+
+Different stages require different test depths:
+
+**Stage 1 (Foundation): Smoke Test (~10s)**
+- Purpose: Verify plugin loads without crashing
+- Flags: `--skip-gui-tests --timeout-ms 10000 --validate-in-process`
+- Checks: Load, unload, basic parameter access
+- Fast fail-fast validation
+
+**Stage 2 (DSP): Functional Test (~2-3min)**
+- Purpose: Verify audio processing and parameter automation
+- Flags: `--skip-gui-tests --strictness-level 10`
+- Checks: All functional tests except GUI (parameter automation, state, thread safety)
+- Comprehensive without UI overhead
+
+**Stage 3 (GUI): Full GUI Test (~5-10min)**
+- Purpose: Verify UI integration and complete plugin behavior
+- Flags: `--strictness-level 10`
+- Checks: Full test suite including editor open/close, UI thread safety
+
+### Running Pluginval
+
+**Locate pluginval:**
+```bash
+if [ -x "/Applications/pluginval.app/Contents/MacOS/pluginval" ]; then
+    PLUGINVAL="/Applications/pluginval.app/Contents/MacOS/pluginval"
+elif command -v pluginval >/dev/null 2>&1; then
+    PLUGINVAL="pluginval"
+else
+    echo "pluginval not found"
+    exit 1
+fi
+```
+
+**Execute test:**
+```bash
+# Stage 1: Smoke test
+"$PLUGINVAL" --validate "$VST3_PATH" --skip-gui-tests --timeout-ms 10000 --validate-in-process
+
+# Stage 2: Functional test
+"$PLUGINVAL" --validate "$VST3_PATH" --skip-gui-tests --strictness-level 10 --timeout-ms 180000
+
+# Stage 3: Full GUI test
+"$PLUGINVAL" --validate "$VST3_PATH" --strictness-level 10 --timeout-ms 600000
+```
+
+### Parsing Pluginval Output
+
+Extract key information from pluginval output:
+
+**Success pattern:**
+```
+All tests PASSED (50/50)
+```
+
+**Failure patterns:**
+```
+❌ [12/50] Parameter automation... FAIL
+❌ [23/50] Thread safety check... FAIL
+```
+
+**Crash detection:**
+- Exit code ≠ 0
+- "Segmentation fault" in output
+- "Exception thrown" in output
+
+**Count errors:**
+- Parse "FAIL" count from output
+- Parse crash indicators
+- Report total error count
+
+### Saving Pluginval Logs
+
+Save full pluginval output to disk for later analysis:
+
+```bash
+LOG_DIR="logs/{PluginName}"
+mkdir -p "$LOG_DIR"
+
+LOG_FILE="$LOG_DIR/pluginval_stage{N}_$(date +%Y%m%d_%H%M%S).log"
+
+# Run and capture output
+"$PLUGINVAL" --validate "$VST3_PATH" ... | tee "$LOG_FILE"
+```
+
+Log path format: `logs/{PluginName}/pluginval_stage{1|2|3}_{timestamp}.log`
+
+### Adding Runtime Results to JSON Report
+
+Pluginval results are added to the `checks` array with appropriate severity:
+
+**Smoke test pass:**
+```json
+{
+  "name": "pluginval_smoke",
+  "passed": true,
+  "message": "Plugin loads and unloads without crashing",
+  "severity": "info"
+}
+```
+
+**Functional test failure:**
+```json
+{
+  "name": "pluginval_functional",
+  "passed": false,
+  "message": "3 failures: parameter automation (2), thread safety (1). See logs/{PluginName}/pluginval_stage2_*.log",
+  "severity": "error"
+}
+```
+
+**Binary not found:**
+```json
+{
+  "name": "pluginval_smoke",
+  "passed": true,
+  "message": "Runtime validation skipped - no binary found (build after semantic validation passes)",
+  "severity": "info"
+}
+```
+
+**Pluginval not installed:**
+```json
+{
+  "name": "pluginval_smoke",
+  "passed": true,
+  "message": "Runtime validation skipped - pluginval not installed",
+  "severity": "warning"
+}
+```
+
+### Blocking Behavior
+
+Runtime validation failures should block progression:
+
+**If pluginval test fails:**
+- Set `continue_to_next_stage: false`
+- Set `status: "FAIL"`
+- Include error count in recommendation
+
+**Example blocking report:**
+```json
+{
+  "agent": "validation-agent",
+  "stage": 2,
+  "status": "FAIL",
+  "checks": [
+    {
+      "name": "pluginval_functional",
+      "passed": false,
+      "message": "5 failures detected. See logs/AutoClip/pluginval_stage2_20251114_143022.log",
+      "severity": "error"
+    }
+  ],
+  "recommendation": "Fix pluginval failures before continuing to Stage 3",
+  "continue_to_next_stage": false
+}
+```
+
+### Graceful Degradation
+
+Runtime validation is opportunistic - don't fail if infrastructure missing:
+
+**Missing binary:**
+- Skip pluginval, continue with semantic checks only
+- Report as "skipped" in JSON
+- Don't block progression
+
+**Missing pluginval:**
+- Skip runtime validation
+- Report as warning in JSON
+- Don't block progression (SessionStart hook already warned user)
+
+**Build failures:**
+- Skip runtime validation
+- Report as info in JSON
+- Semantic validation may detect build-breaking patterns
+
+This ensures validation-agent always completes successfully, even when runtime validation isn't possible.
+
 ## Stage-Specific Validation
 
 ### Stage 0: Architecture Specification Validation
@@ -245,56 +451,6 @@ This provides context and links findings to the knowledge base.
 - `plugins/[PluginName]/Source/PluginProcessor.{h,cpp}`
 - `plugins/[PluginName]/Source/PluginEditor.{h,cpp}`
 - `plugins/[PluginName]/.ideas/architecture.md`
-
-**Semantic Checks (hooks already validated patterns exist):**
-
-- ✓ CMakeLists.txt uses appropriate JUCE modules for plugin type?
-- ✓ Plugin format configuration matches creative brief (VST3/AU/Standalone)?
-- ✓ JUCE 8 patterns used (ParameterID with version 1)?
-- ✓ PluginProcessor inherits correctly from AudioProcessor?
-- ✓ Editor/processor relationship properly established?
-- ✓ Code organization follows JUCE best practices?
-
-**Example Report:**
-
-```json
-{
-  "agent": "validation-agent",
-  "stage": 2,
-  "status": "PASS",
-  "checks": [
-    {
-      "name": "juce_modules",
-      "passed": true,
-      "message": "CMakeLists.txt includes juce_audio_basics, juce_audio_processors for audio plugin",
-      "severity": "info"
-    },
-    {
-      "name": "plugin_formats",
-      "passed": true,
-      "message": "VST3 and AU formats enabled as specified in brief",
-      "severity": "info"
-    },
-    {
-      "name": "juce8_patterns",
-      "passed": true,
-      "message": "ParameterID uses version 1 format",
-      "severity": "info"
-    }
-  ],
-  "recommendation": "Foundation follows JUCE 8 best practices",
-  "continue_to_next_stage": true
-}
-```
-
-### Stage 1: Foundation Validation
-
-**Expected Inputs:**
-
-- `plugins/[PluginName]/CMakeLists.txt`
-- `plugins/[PluginName]/Source/PluginProcessor.{h,cpp}`
-- `plugins/[PluginName]/Source/PluginEditor.{h,cpp}`
-- `plugins/[PluginName]/.ideas/architecture.md`
 - `plugins/[PluginName]/.ideas/parameter-spec.md`
 
 **Semantic Checks (hooks already validated patterns exist):**
@@ -309,49 +465,49 @@ This provides context and links findings to the knowledge base.
 - ✓ Parameter IDs match specification exactly (zero-drift)?
 - ✓ Code organization follows JUCE best practices?
 
-**Example Report:**
+**Runtime Checks:**
+
+After semantic validation passes, attempt smoke test:
+
+1. Build plugin in Release mode (if not already built)
+2. Locate VST3/AU binaries
+3. Run pluginval smoke test: `--skip-gui-tests --timeout-ms 10000 --validate-in-process`
+4. Parse results and add to checks array
+5. Save log to `logs/{PluginName}/pluginval_stage1_*.log`
+
+If binary doesn't exist or build fails, skip runtime validation (report as "skipped").
+
+**Example Report (with runtime validation):**
 
 ```json
 {
   "agent": "validation-agent",
-  "stage": 2,
+  "stage": 1,
   "plugin_name": "AutoClip",
   "status": "PASS",
   "checks": [
     {
-      "name": "juce_modules",
-      "passed": true,
-      "message": "CMakeLists.txt includes juce_audio_basics, juce_audio_processors for audio plugin",
-      "severity": "info"
-    },
-    {
-      "name": "plugin_formats",
-      "passed": true,
-      "message": "VST3 and AU formats enabled as specified in brief",
-      "severity": "info"
-    },
-    {
       "name": "juce8_patterns",
       "passed": true,
-      "message": "ParameterID uses version 1 format, juce_generate_juce_header() called correctly",
-      "severity": "info"
-    },
-    {
-      "name": "parameter_count",
-      "passed": true,
-      "message": "All 7 parameters from parameter-spec.md implemented in APVTS",
+      "message": "ParameterID v1, juce_generate_juce_header() correct, all 7 params implemented",
       "severity": "info"
     },
     {
       "name": "parameter_drift",
       "passed": true,
-      "message": "Parameter IDs match specification exactly (zero-drift verified)",
+      "message": "Parameter IDs match specification (zero-drift)",
+      "severity": "info"
+    },
+    {
+      "name": "pluginval_smoke",
+      "passed": true,
+      "message": "Plugin loads and unloads without crashing (10s test)",
       "severity": "info"
     }
   ],
-  "recommendation": "Foundation follows JUCE 8 best practices, all parameters implemented correctly",
+  "recommendation": "Foundation solid, ready for DSP implementation",
   "continue_to_next_stage": true,
-  "token_count": 423
+  "token_count": 287
 }
 ```
 
@@ -374,43 +530,55 @@ This provides context and links findings to the knowledge base.
 - ✓ Numerical stability (denormals, DC offset)?
 - ✓ ScopedNoDenormals used in processBlock?
 
-**Example Report:**
+**Runtime Checks:**
+
+After semantic validation passes, run functional test:
+
+1. Build plugin in Release mode (if not already built)
+2. Locate VST3/AU binaries
+3. Run pluginval functional test: `--skip-gui-tests --strictness-level 10 --timeout-ms 180000`
+4. Parse results and add to checks array
+5. Save log to `logs/{PluginName}/pluginval_stage2_*.log`
+
+Functional test validates:
+- Parameter automation works (all params affect audio)
+- State save/load correct
+- Thread safety (no allocations in processBlock)
+- Audio processing doesn't crash
+
+If binary doesn't exist or build fails, skip runtime validation (report as "skipped").
+
+**Example Report (with runtime validation):**
 
 ```json
 {
   "agent": "validation-agent",
-  "stage": 3,
+  "stage": 2,
   "plugin_name": "AutoClip",
-  "status": "WARNING",
+  "status": "PASS",
   "checks": [
-    {
-      "name": "creative_intent",
-      "passed": true,
-      "message": "Soft-clipping algorithm matches 'warm saturation' description from brief",
-      "severity": "info"
-    },
     {
       "name": "realtime_safety",
       "passed": true,
-      "message": "No allocations in processBlock(), uses ScopedNoDenormals",
+      "message": "No allocations in processBlock, ScopedNoDenormals used, buffer preallocation correct",
       "severity": "info"
     },
     {
-      "name": "buffer_preallocation",
+      "name": "creative_intent",
       "passed": true,
-      "message": "prepareToPlay() allocates delay buffers",
+      "message": "Soft-clipping matches 'warm saturation' from brief",
       "severity": "info"
     },
     {
-      "name": "edge_cases",
-      "passed": false,
-      "message": "No check for zero-length buffer in processBlock() line 87",
-      "severity": "warning"
+      "name": "pluginval_functional",
+      "passed": true,
+      "message": "All functional tests passed (parameter automation, state, thread safety) - 2m 14s",
+      "severity": "info"
     }
   ],
-  "recommendation": "DSP implementation solid, consider adding zero-length buffer check for robustness",
+  "recommendation": "DSP implementation verified, ready for GUI integration",
   "continue_to_next_stage": true,
-  "token_count": 398
+  "token_count": 312
 }
 ```
 
@@ -433,37 +601,55 @@ This provides context and links findings to the knowledge base.
 - ✓ Binary data embedded correctly?
 - ✓ All parameters from spec have UI bindings?
 
-**Example Report:**
+**Runtime Checks:**
+
+After semantic validation passes, run full GUI test:
+
+1. Build plugin in Release mode (if not already built)
+2. Locate VST3/AU binaries
+3. Run pluginval full test: `--strictness-level 10 --timeout-ms 600000`
+4. Parse results and add to checks array
+5. Save log to `logs/{PluginName}/pluginval_stage3_*.log`
+
+Full GUI test validates:
+- All functional tests (from Stage 2)
+- Editor open/close without crashes
+- UI thread safety
+- Complete plugin behavior
+
+If binary doesn't exist or build fails, skip runtime validation (report as "skipped").
+
+**Example Report (with runtime validation):**
 
 ```json
 {
   "agent": "validation-agent",
-  "stage": 4,
+  "stage": 3,
   "plugin_name": "AutoClip",
-  "status": "FAIL",
+  "status": "PASS",
   "checks": [
     {
       "name": "member_order",
-      "passed": false,
-      "message": "Member declaration order incorrect: attachments declared before webView (should be relays → webView → attachments)",
-      "severity": "error"
+      "passed": true,
+      "message": "Relays → WebView → Attachments declaration order correct",
+      "severity": "info"
     },
     {
       "name": "parameter_bindings",
       "passed": true,
-      "message": "All 7 parameters have relay/attachment pairs",
+      "message": "All 7 parameters have relay/attachment pairs, ranges match spec",
       "severity": "info"
     },
     {
-      "name": "ui_aesthetic",
+      "name": "pluginval_gui",
       "passed": true,
-      "message": "Visual design matches mockup v2",
+      "message": "Full GUI test passed (editor, automation, state, thread safety) - 8m 42s",
       "severity": "info"
     }
   ],
-  "recommendation": "Fix member declaration order to prevent release build crashes (90% crash rate with wrong order)",
-  "continue_to_next_stage": false,
-  "token_count": 356
+  "recommendation": "GUI integration verified, plugin ready for final validation",
+  "continue_to_next_stage": true,
+  "token_count": 298
 }
 ```
 
@@ -675,12 +861,14 @@ This allows users to suppress false positives while maintaining visibility.
 
 ## Best Practices
 
-1. **Be advisory, not blocking** - User makes final decisions
-2. **Focus on semantics** - Hooks already validated patterns
-3. **Provide actionable feedback** - Specific location and suggestion
-4. **Respect creative intent** - Brief is source of truth
-5. **Support overrides** - False positives happen
-6. **Return valid JSON** - Always parseable, never malformed
+1. **Combine semantic + runtime validation** - Check code patterns AND binary behavior
+2. **Graceful degradation** - Skip runtime validation if binary/pluginval missing
+3. **Block on runtime failures** - pluginval errors set continue_to_next_stage: false
+4. **Provide actionable feedback** - Specific location and suggestion
+5. **Respect creative intent** - Brief is source of truth
+6. **Support overrides** - False positives happen
+7. **Return valid JSON** - Always parseable, never malformed
+8. **Save logs** - Always save pluginval output to logs/{PluginName}/
 
 ## Invocation Pattern
 

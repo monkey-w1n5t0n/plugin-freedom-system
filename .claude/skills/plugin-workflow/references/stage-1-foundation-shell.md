@@ -1,7 +1,7 @@
 # Stage 1: Foundation + Shell
 
 **Context:** This file is part of the plugin-workflow skill.
-**Invoked by:** Main workflow dispatcher after Stage 1 completion
+**Invoked by:** Main workflow dispatcher after Stage 0 completion
 **Purpose:** Create plugin structure with build system AND implement ALL parameters with APVTS in single pass
 
 ---
@@ -10,7 +10,7 @@
 
 **Preconditions:**
 
-- Stage 1 complete (plan.md exists)
+- Stage 0 complete (plan.md exists)
 - creative-brief.md exists
 - architecture.md exists
 - parameter-spec.md exists (from finalized UI mockup)
@@ -47,7 +47,7 @@ const foundationShellResult = Task({
 You are foundation-shell-agent implementing Stage 1 for ${pluginName}.
 
 **Plugin:** ${pluginName}
-**Stage:** 2 (Foundation + Shell)
+**Stage:** 1 (Foundation + Shell)
 **Your task:** Create build system and implement ALL parameters
 
 **Contracts (read these files yourself):**
